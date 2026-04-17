@@ -10,7 +10,7 @@ Read and follow exactly what it says:
 Before reading it, follow its boot contract:
 
   1. Read .autopilot/STATE.md.
-  2. Honor `.autopilot/HALT` (exit if present).
+  2. Honor `.autopilot/HALT` (exit if present — do NOT self-reschedule).
   3. Read .autopilot/PROMPT.md verbatim and execute its mode-dispatch per the [boot]
      [IMMUTABLE] block.
 
@@ -42,6 +42,26 @@ Budget hard cap this iteration:
   ≤ 8 file reads, ≤ 15 tool calls, ≤ 90 min wall-clock, ≤ 1 PR, ≤ 1 evolution commit.
   Overrun → finish smallest commit-worthy slice, exit, handoff.
 
-Paste this prompt again after the NEXT_DELAY seconds to advance one more iteration.
+=============================================================================
+SELF-SCHEDULING (Claude Code /loop dynamic mode)
+=============================================================================
+
+This prompt is designed to be launched via Claude Code's `/loop` slash command
+in dynamic-pacing mode. As the final step of every iteration (AFTER writing
+NEXT_DELAY, removing LOCK, and emitting the METRICS line):
+
+  1. Read the integer N from .autopilot/NEXT_DELAY (60 ≤ N ≤ 3600).
+  2. If .autopilot/HALT now exists, or status written to STATE is
+     `halted` / `mvp-complete` / `stagnation on <gate>` / `env-broken` — do
+     NOT reschedule. The operator must resume explicitly.
+  3. Otherwise call the ScheduleWakeup tool with:
+        delaySeconds = N
+        prompt       = this entire RUN.txt body, verbatim
+        reason       = short one-liner: "<mode>: <what next tick checks>"
+     Omitting the call ends the loop; call it to continue.
+
+If you were invoked by a plain paste (not /loop), just exit — the operator
+will re-paste after NEXT_DELAY seconds. The write to NEXT_DELAY is the
+canonical record either way; ScheduleWakeup just automates the re-fire.
 
 Go.
