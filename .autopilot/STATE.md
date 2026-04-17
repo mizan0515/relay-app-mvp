@@ -2,9 +2,10 @@
 
 root: .
 base: main
-iteration: 0
-status: initialized
+iteration: 1
+status: idle-upkeep-bootstrap
 active_task: null
+# Next iter should auto-promote BACKLOG P1 [F-impl-1] → Active, gate G6.
 # active_task schema:
 #   slug: <kebab-case>
 #   plan: [bullet, bullet]
@@ -58,6 +59,8 @@ open_questions:
 # MVP gates: canonical checklist at .autopilot/MVP-GATES.md. STATE tracks only tally.
 mvp_gates: 0/8
 mvp_last_advanced_iter: 0
+
+OPERATOR: allow evolution wake-reschedule watchdog — iter 0 loop halted silently because summary text claimed "rescheduled" while ScheduleWakeup tool call was never made (see .autopilot/INCIDENT-2026-04-18-loop-halt.md); add sentinel-based dual verification so next iter's boot can detect reschedule-miss.
 
 # OPERATOR overrides — any line starting with `OPERATOR:` wins over PROMPT.md.
 #   OPERATOR: halt

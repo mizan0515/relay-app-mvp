@@ -83,6 +83,29 @@ switch ($Verb) {
     }
   }
 
+  'check-reschedule' {
+    # Detects the iter-0 failure mode (summary said "rescheduled" but ScheduleWakeup
+    # never fired). See [IMMUTABLE:wake-reschedule] in .autopilot/PROMPT.md.
+    $last    = '.autopilot/LAST_RESCHEDULE'
+    $halt    = '.autopilot/LAST_HALT_NOTE'
+    $metrics = '.autopilot/METRICS.jsonl'
+    if (-not (Test-Path $metrics)) { Write-Host 'no METRICS yet — nothing to verify'; exit 0 }
+    $metricsMtime = (Get-Item $metrics).LastWriteTimeUtc
+    $candidates = @()
+    if (Test-Path $last) { $candidates += (Get-Item $last).LastWriteTimeUtc }
+    if (Test-Path $halt) { $candidates += (Get-Item $halt).LastWriteTimeUtc }
+    if (-not $candidates) {
+      Write-Warning "no LAST_RESCHEDULE or LAST_HALT_NOTE sentinel — previous iter likely skipped ScheduleWakeup (summary-only halt)"
+      exit 2
+    }
+    $newest = ($candidates | Sort-Object -Descending | Select-Object -First 1)
+    if ($newest -lt $metricsMtime) {
+      Write-Warning "sentinel older than METRICS ($newest UTC < $metricsMtime UTC) — reschedule-miss suspected"
+      exit 2
+    }
+    Write-Host "ok (newest sentinel: $newest UTC, METRICS tail: $metricsMtime UTC)"
+  }
+
   'start' {
     Write-Host 'Paste the contents of .autopilot/RUN.txt into Claude Code.'
     Write-Host 'Absolute path:'
@@ -111,6 +134,7 @@ Verbs:
   start           Print path to RUN.txt for pasting into Claude Code.
   stop            Create .autopilot/HALT (polite stop).
   resume          Remove .autopilot/HALT.
+  check-reschedule  Verify previous iter actually called ScheduleWakeup (sentinel vs METRICS).
 "@
   }
 }

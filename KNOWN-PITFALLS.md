@@ -36,3 +36,9 @@ the next iteration should pre-plan around it, not rediscover it. **Append only. 
 ### 2026-04-17 — Codex patch fidelity deviates on README-style appends
 - Symptom: during `dad-asset-qa-20260417-145500`, Codex appended literal `A` to `README.md` instead of the prompt's append string.
 - Next time: append/edit test scenarios should assert exact content on disk, not just "file changed." Don't trust patch summaries; diff the actual bytes.
+
+### 2026-04-18 — Autopilot summary text is not proof of `ScheduleWakeup` tool call
+- Symptom: iter 0 end message read "NEXT_DELAY=1800; rescheduled" but /loop dynamic-mode wakeup never fired. Loop silently halted with no HALT/LOCK/env-broken marker; `.autopilot/NEXT_DELAY` written correctly; `status: idle-upkeep-bootstrap` (not a halt condition).
+- Root cause: agent wrote summary narration but did not actually invoke the `ScheduleWakeup` tool. Text ≠ side-effect.
+- Next time: trust only `.autopilot/LAST_RESCHEDULE` (written after tool-call return) and `.autopilot/LAST_HALT_NOTE` (intentional-halt sentinel). Boot watchdog in `[IMMUTABLE:wake-reschedule]` compares sentinel mtime vs METRICS tail; `.autopilot/project.ps1 check-reschedule` runs the same check manually.
+- Resolved in: `dev/autopilot-relay-evolution-20260418-2121` + `.autopilot/INCIDENT-2026-04-18-loop-halt.md`.
