@@ -24,6 +24,16 @@ public sealed class RelaySessionState
 
     public HandoffEnvelope? LastHandoff { get; set; }
 
+    public string? LastHandoffHash { get; set; }
+
+    public string? Goal { get; set; }
+
+    public List<string> Completed { get; set; } = [];
+
+    public List<string> Pending { get; set; } = [];
+
+    public List<string> Constraints { get; set; } = [];
+
     public List<string> AcceptedRelayKeys { get; set; } = [];
 
     public Dictionary<string, string> NativeSessionHandles { get; set; } = [];

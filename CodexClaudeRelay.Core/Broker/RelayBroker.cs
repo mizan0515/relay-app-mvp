@@ -107,6 +107,11 @@ public sealed class RelayBroker
             SessionApprovalRules = [],
             PolicyGapAdvisoriesFired = [],
             LastHandoff = null,
+            LastHandoffHash = null,
+            Goal = null,
+            Completed = [],
+            Pending = [],
+            Constraints = [],
             LastUsageBySide = [],
             LastCumulativeByHandle = [],
             TotalInputTokens = 0,
@@ -629,6 +634,7 @@ public sealed class RelayBroker
 
         State.AcceptedRelayKeys.Add(relayKey);
         State.LastHandoff = handoff;
+        State.LastHandoffHash = relayHash;
         State.PendingPrompt = handoff.Prompt;
         State.ActiveSide = handoff.Target;
         State.CurrentTurn++;
