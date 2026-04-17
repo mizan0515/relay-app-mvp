@@ -1,0 +1,33 @@
+# Build artifacts
+**/bin/
+**/obj/
+**/.vs/
+*.user
+*.suo
+
+# Runtime / local data
+logs/
+auto-logs/
+.autopilot/HALT
+.autopilot/LOCK
+.autopilot/NEXT_DELAY
+.autopilot/PITFALLS.md
+.autopilot/BACKLOG.md
+.autopilot/FINDINGS.md
+.autopilot/EVOLUTION.md
+.autopilot/HISTORY.md
+.autopilot/BRAINSTORM.md
+.autopilot/METRICS.jsonl
+.autopilot/qa-evidence/
+
+# Claude Code local state
+.claude/
+
+# Local dev notes (not for publication)
+DERIVATION.md
+NOTES.local.md
+*.local.md
+
+# OS cruft
+Thumbs.db
+.DS_Store

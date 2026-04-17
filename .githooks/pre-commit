@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# .githooks/pre-commit — autopilot safety gate.
+# Enforces IMMUTABLE blocks, protected_paths, MVP-GATES integrity, delete hard-cap.
+set -euo pipefail
+repo_root="$(git rev-parse --show-toplevel)"
+exec bash "$repo_root/.githooks/protect.sh"

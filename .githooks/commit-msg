@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# .githooks/commit-msg — trailer-gate for IMMUTABLE-ADD and cleanup-operator-approved.
+set -euo pipefail
+repo_root="$(git rev-parse --show-toplevel)"
+exec bash "$repo_root/.githooks/commit-msg-protect.sh" "$1"

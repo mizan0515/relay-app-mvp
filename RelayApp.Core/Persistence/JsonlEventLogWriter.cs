@@ -1,0 +1,40 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using RelayApp.Core.Models;
+
+namespace RelayApp.Core.Persistence;
+
+public sealed class JsonlEventLogWriter : IEventLogWriter
+{
+    private static readonly JsonSerializerOptions SerializerOptions = new()
+    {
+        Converters = { new JsonStringEnumConverter() },
+    };
+
+    private readonly string _logDirectory;
+    private readonly SemaphoreSlim _lock = new(1, 1);
+
+    public JsonlEventLogWriter(string logDirectory)
+    {
+        _logDirectory = logDirectory;
+        Directory.CreateDirectory(_logDirectory);
+    }
+
+    public async Task AppendAsync(string sessionId, RelayLogEvent logEvent, CancellationToken cancellationToken)
+    {
+        var path = GetLogPath(sessionId);
+        var line = JsonSerializer.Serialize(logEvent, SerializerOptions);
+
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            await File.AppendAllTextAsync(path, line + Environment.NewLine, cancellationToken);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    public string GetLogPath(string sessionId) => Path.Combine(_logDirectory, $"{sessionId}.jsonl");
+}
