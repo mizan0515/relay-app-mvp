@@ -1298,6 +1298,8 @@ public sealed class RelayBroker
 
     private async Task RotateSessionAsync(string reason, CancellationToken cancellationToken)
     {
+        await WriteRollingSummaryAsync(reason, cancellationToken);
+
         RemoveActiveSessionHandle();
         var prunedBaselineCount = PruneDeadHandleBaselines();
         State.ConsecutiveLowCacheTurnsBySide.Clear();
@@ -1595,6 +1597,136 @@ public sealed class RelayBroker
             current.PricingFallbackReason,
             current.CliVersion,
             current.AuthMethod);
+    }
+
+    private async Task WriteRollingSummaryAsync(string rotationReason, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(State.SessionId))
+        {
+            return;
+        }
+
+        var segmentNumber = State.RotationCount + 1;
+        var sessionId = State.SessionId;
+        var activeSide = State.ActiveSide;
+        string? path = null;
+        try
+        {
+            var baseDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "CodexClaudeRelayMvp",
+                "summaries");
+            Directory.CreateDirectory(baseDir);
+            path = Path.Combine(baseDir, $"{sessionId}-segment-{segmentNumber}.md");
+            var markdown = BuildRollingSummaryMarkdown(segmentNumber, rotationReason);
+            await File.WriteAllTextAsync(path, markdown, System.Text.Encoding.UTF8, cancellationToken);
+            var bytes = System.Text.Encoding.UTF8.GetByteCount(markdown);
+
+            var payload =
+                "{" +
+                $"\"path\":\"{EscapeJsonString(path)}\"," +
+                $"\"bytes\":{bytes}," +
+                $"\"segment\":{segmentNumber}," +
+                $"\"session_id\":\"{EscapeJsonString(sessionId)}\"," +
+                $"\"turns\":{State.TurnsSinceLastRotation}," +
+                $"\"cost_claude_usd\":{State.TotalCostClaudeUsd.ToString("F4", System.Globalization.CultureInfo.InvariantCulture)}," +
+                $"\"cost_codex_usd\":{State.TotalCostCodexUsd.ToString("F4", System.Globalization.CultureInfo.InvariantCulture)}" +
+                "}";
+
+            await PersistAndLogAsync(
+                new RelayLogEvent(
+                    DateTimeOffset.Now,
+                    "summary.generated",
+                    activeSide,
+                    $"Rolling summary segment {segmentNumber} written ({bytes} bytes) for session {sessionId}.",
+                    payload),
+                cancellationToken);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or PathTooLongException)
+        {
+            await PersistAndLogAsync(
+                new RelayLogEvent(
+                    DateTimeOffset.Now,
+                    "summary.failed",
+                    activeSide,
+                    $"Rolling summary segment {segmentNumber} failed for session {sessionId}: {ex.GetType().Name}: {ex.Message}. path={path ?? "(not resolved)"}"),
+                cancellationToken);
+        }
+    }
+
+    private string BuildRollingSummaryMarkdown(int segmentNumber, string rotationReason)
+    {
+        var now = DateTimeOffset.Now;
+        string handoffBlock;
+        if (State.LastHandoff is { } h)
+        {
+            handoffBlock =
+                $"- source: {h.Source}{Environment.NewLine}" +
+                $"- target: {h.Target}{Environment.NewLine}" +
+                $"- turn: {h.Turn}{Environment.NewLine}" +
+                $"- ready: {h.Ready}{Environment.NewLine}" +
+                $"- reason: {(string.IsNullOrWhiteSpace(h.Reason) ? "(none)" : h.Reason)}";
+        }
+        else
+        {
+            handoffBlock = "- (no handoff captured this segment)";
+        }
+
+        var pendingPrompt = string.IsNullOrWhiteSpace(State.PendingPrompt) ? "(none)" : State.PendingPrompt;
+
+        return
+            $"# Session {State.SessionId} — segment {segmentNumber}{Environment.NewLine}{Environment.NewLine}" +
+            $"- Closed at: {now:O}{Environment.NewLine}" +
+            $"- Segment started at: {State.SessionStartedAt:O}{Environment.NewLine}" +
+            $"- Rotation reason: {rotationReason}{Environment.NewLine}" +
+            $"- Turns in this segment: {State.TurnsSinceLastRotation}{Environment.NewLine}" +
+            $"- Active side at rotation: {State.ActiveSide}{Environment.NewLine}{Environment.NewLine}" +
+            $"## Cumulative totals{Environment.NewLine}" +
+            $"- input_tokens: {State.TotalInputTokens}{Environment.NewLine}" +
+            $"- output_tokens: {State.TotalOutputTokens}{Environment.NewLine}" +
+            $"- cache_read_input_tokens: {State.TotalCacheReadInputTokens}{Environment.NewLine}" +
+            $"- cache_creation_input_tokens: {State.TotalCacheCreationInputTokens}{Environment.NewLine}" +
+            $"- cost_claude_usd: {State.TotalCostClaudeUsd.ToString("F4", System.Globalization.CultureInfo.InvariantCulture)}{Environment.NewLine}" +
+            $"- cost_codex_usd: {State.TotalCostCodexUsd.ToString("F4", System.Globalization.CultureInfo.InvariantCulture)}{Environment.NewLine}{Environment.NewLine}" +
+            $"## Last handoff{Environment.NewLine}" +
+            $"{handoffBlock}{Environment.NewLine}{Environment.NewLine}" +
+            $"## Pending prompt at rotation boundary{Environment.NewLine}" +
+            $"{pendingPrompt}{Environment.NewLine}";
+    }
+
+    private static string EscapeJsonString(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return string.Empty;
+        }
+
+        var builder = new System.Text.StringBuilder(value.Length);
+        foreach (var ch in value)
+        {
+            switch (ch)
+            {
+                case '\\': builder.Append("\\\\"); break;
+                case '"': builder.Append("\\\""); break;
+                case '\b': builder.Append("\\b"); break;
+                case '\f': builder.Append("\\f"); break;
+                case '\n': builder.Append("\\n"); break;
+                case '\r': builder.Append("\\r"); break;
+                case '\t': builder.Append("\\t"); break;
+                default:
+                    if (ch < 0x20)
+                    {
+                        builder.Append("\\u").Append(((int)ch).ToString("X4", System.Globalization.CultureInfo.InvariantCulture));
+                    }
+                    else
+                    {
+                        builder.Append(ch);
+                    }
+                    break;
+            }
+        }
+
+        return builder.ToString();
     }
 
     private sealed record BudgetTrip(string Signal, string Reason);
