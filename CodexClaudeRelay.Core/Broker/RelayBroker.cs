@@ -662,6 +662,16 @@ public sealed class RelayBroker
         State.AcceptedRelayKeys.Add(relayKey);
         State.LastHandoff = handoff;
         State.LastHandoffHash = relayHash;
+        State.Goal = string.IsNullOrWhiteSpace(handoff.Reason) ? null : handoff.Reason;
+        var carriedPending = new List<string>(handoff.Summary.Count);
+        foreach (var line in handoff.Summary)
+        {
+            if (!string.IsNullOrWhiteSpace(line))
+            {
+                carriedPending.Add(line);
+            }
+        }
+        State.Pending = carriedPending;
         State.PendingPrompt = handoff.Prompt;
         State.ActiveSide = handoff.Target;
         State.CurrentTurn++;

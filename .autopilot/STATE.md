@@ -2,10 +2,10 @@
 
 root: .
 base: main
-iteration: 5
+iteration: 6
 status: active-complete
 active_task: null
-# Last completed: F-impl-3 carry-forward injection primitive — TryBuildCarryForwardBlock + summary.loaded emission + CarryForwardPending flag (gate G7 full render path; population-from-handoff still pending as F-impl-3b follow-up). Next: BACKLOG P1 [F-impl-3b] populate Goal/Completed/Pending/Constraints from handoff envelope in CompleteHandoffAsync, then F-live-1.
+# Last completed: F-impl-3b carry-forward population — CompleteHandoffAsync now sets State.Goal from handoff.Reason and State.Pending from handoff.Summary (filtered non-blank); Completed + Constraints still default empty (no envelope source). Gate G7 population leg partial. Next: BACKLOG P1 [F-impl-3c] extend HandoffEnvelope with completed/constraints JSON fields + parser/serializer update, or jump to F-live-1 if operator prefers live validation of the current partial path.
 # active_task schema:
 #   slug: <kebab-case>
 #   plan: [bullet, bullet]
