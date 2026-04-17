@@ -530,6 +530,45 @@ Before exit, in order:
 
 ---
 
+## [IMMUTABLE:BEGIN wake-reschedule]
+
+### Wake-reschedule watchdog — exit-side dual verification
+
+Exit-contract Step 4 writes `NEXT_DELAY`; the `ScheduleWakeup` tool call that
+consumes that integer is a separate side-effect in "Runner-agnostic invocation"
+below. These two MUST stay in lockstep or the loop silently halts (observed
+2026-04-18: summary text claimed "rescheduled" while no tool call fired —
+`.autopilot/INCIDENT-2026-04-18-loop-halt.md`).
+
+Mandatory invariants:
+
+1. **Sentinel write.** Immediately AFTER `ScheduleWakeup` returns, write the
+   current ISO-8601 UTC timestamp (trailing `Z`) to `.autopilot/LAST_RESCHEDULE`.
+   Write this file under NO other condition — it is the proof-of-tool-call,
+   not a log line.
+2. **Halt suppression.** When omitting `ScheduleWakeup` because of a halt
+   status (`halted` / `mvp-complete` / `stagnation on <gate>` / `env-broken` /
+   `probation-revert` / `.autopilot/HALT` present), write the ISO timestamp
+   plus a one-line reason to `.autopilot/LAST_HALT_NOTE`. This distinguishes
+   intentional halt from missed reschedule.
+3. **Boot watchdog.** After the env self-check, compare the tail METRICS line
+   timestamp against `LAST_RESCHEDULE` / `LAST_HALT_NOTE` mtime. If a previous
+   iter METRICS line exists AND neither sentinel is newer than it, append one
+   FINDINGS line `severity: high, kind: reschedule-miss` with the gap. Also
+   runnable as `.autopilot/project.ps1 check-reschedule`.
+4. **Summary text is not proof.** The words "rescheduled", "scheduled",
+   "next tick" in any end-of-iter summary are NOT evidence of the tool call;
+   only the sentinel file is. When grading iter health, trust sentinel mtime
+   over narration.
+
+Removing this block or dropping sentinel writes from the exit path is an
+IMMUTABLE violation. The sentinel files themselves are mutable (overwritten
+each iter); the requirement to write them is not.
+
+## [IMMUTABLE:END wake-reschedule]
+
+---
+
 ## Runner-agnostic invocation
 
 The runner supplies the AI session + sleep/resubmit loop. Two supported shapes:
