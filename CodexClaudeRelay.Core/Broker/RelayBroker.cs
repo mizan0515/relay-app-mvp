@@ -672,6 +672,24 @@ public sealed class RelayBroker
             }
         }
         State.Pending = carriedPending;
+        var carriedCompleted = new List<string>(handoff.Completed.Count);
+        foreach (var line in handoff.Completed)
+        {
+            if (!string.IsNullOrWhiteSpace(line))
+            {
+                carriedCompleted.Add(line);
+            }
+        }
+        State.Completed = carriedCompleted;
+        var carriedConstraints = new List<string>(handoff.Constraints.Count);
+        foreach (var line in handoff.Constraints)
+        {
+            if (!string.IsNullOrWhiteSpace(line))
+            {
+                carriedConstraints.Add(line);
+            }
+        }
+        State.Constraints = carriedConstraints;
         State.PendingPrompt = handoff.Prompt;
         State.ActiveSide = handoff.Target;
         State.CurrentTurn++;

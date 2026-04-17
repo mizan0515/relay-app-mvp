@@ -2,10 +2,10 @@
 
 root: .
 base: main
-iteration: 7
-status: evolution-complete
+iteration: 8
+status: active-complete
 active_task: null
-# Last completed: prompt-evolution — [IMMUTABLE:exit-contract] now enumerates ScheduleWakeup (Step 5) + proof-of-call sentinel (Step 6, 2-line: ts + raw tool response). check-reschedule rejects 1-line sentinels as forgery. Drove by iter 6 reschedule-miss repeat (operator-authorized 2026-04-18 "보강하고 막힌거 풀어"). Probation: baseline iters 2-6, end iter 9. Next: resume F-impl-3c (BACKLOG P1) or F-live-1 per operator preference.
+# Last completed: F-impl-3c part 1 (PR #9 c5bbe25) — HandoffEnvelope + HandoffJson schema gain optional `completed` and `constraints` arrays. Parser read-path and broker CompleteHandoffAsync wiring deferred to part 2. Build clean. Next: F-impl-3c part 2 (parser + broker wiring) OR F-live-1.
 # active_task schema:
 #   slug: <kebab-case>
 #   plan: [bullet, bullet]

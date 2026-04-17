@@ -294,6 +294,8 @@ public static partial class HandoffParser
                 Ready = ready,
                 Prompt = prompt ?? string.Empty,
                 Summary = summary,
+                Completed = GetStringArray(root, "completed"),
+                Constraints = GetStringArray(root, "constraints"),
                 RequiresHuman = requiresHuman,
                 Reason = reason ?? string.Empty,
                 CreatedAt = TryGetDateTimeOffset(root, "created_at", out var createdAt) ? createdAt : DateTimeOffset.Now,
@@ -426,6 +428,22 @@ public static partial class HandoffParser
         }
 
         return summaryElement.EnumerateArray()
+            .Select(item => item.ValueKind == JsonValueKind.String ? item.GetString() : item.ToString())
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .Cast<string>()
+            .Take(10)
+            .ToList();
+    }
+
+    private static List<string> GetStringArray(JsonElement root, string propertyName)
+    {
+        if (!root.TryGetProperty(propertyName, out var element) ||
+            element.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        return element.EnumerateArray()
             .Select(item => item.ValueKind == JsonValueKind.String ? item.GetString() : item.ToString())
             .Where(item => !string.IsNullOrWhiteSpace(item))
             .Cast<string>()
