@@ -11,6 +11,8 @@ auto-logs/
 .autopilot/HALT
 .autopilot/LOCK
 .autopilot/NEXT_DELAY
+.autopilot/LAST_RESCHEDULE
+.autopilot/LAST_HALT_NOTE
 .autopilot/PITFALLS.md
 .autopilot/BACKLOG.md
 .autopilot/FINDINGS.md
