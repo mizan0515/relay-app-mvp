@@ -41,6 +41,18 @@ public static class HandoffJson
                     ["minItems"] = 1,
                     ["maxItems"] = 10,
                 },
+                ["completed"] = new Dictionary<string, object?>
+                {
+                    ["type"] = "array",
+                    ["items"] = new Dictionary<string, object?> { ["type"] = "string" },
+                    ["maxItems"] = 10,
+                },
+                ["constraints"] = new Dictionary<string, object?>
+                {
+                    ["type"] = "array",
+                    ["items"] = new Dictionary<string, object?> { ["type"] = "string" },
+                    ["maxItems"] = 10,
+                },
                 ["requires_human"] = new Dictionary<string, object?> { ["type"] = "boolean" },
                 ["reason"] = new Dictionary<string, object?> { ["type"] = "string" },
                 ["created_at"] = new Dictionary<string, object?> { ["type"] = "string" },

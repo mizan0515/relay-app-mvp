@@ -31,6 +31,12 @@ public sealed record HandoffEnvelope
     [JsonPropertyName("summary")]
     public IReadOnlyList<string> Summary { get; init; } = [];
 
+    [JsonPropertyName("completed")]
+    public IReadOnlyList<string> Completed { get; init; } = [];
+
+    [JsonPropertyName("constraints")]
+    public IReadOnlyList<string> Constraints { get; init; } = [];
+
     [JsonPropertyName("requires_human")]
     public bool RequiresHuman { get; init; }
 
