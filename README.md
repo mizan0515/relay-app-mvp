@@ -41,8 +41,22 @@ enforcement via git hooks. To advance one iteration:
 ```powershell
 .\.autopilot\project.ps1 install-hooks   # one-time, sets core.hooksPath=.githooks
 .\.autopilot\project.ps1 start           # prints path to RUN.txt
-# paste RUN.txt contents into Claude Code
 ```
+
+Then in Claude Code, **preferred** launch (self-scheduling via `/loop` dynamic mode):
+
+```
+/loop <paste .autopilot/RUN.txt body here>
+```
+
+The loop calls `ScheduleWakeup` at the end of each iteration using the
+`NEXT_DELAY` seconds it just wrote — 270 / 900 / 1800 / 3600 depending on mode
+— and re-fires the same prompt automatically. It stops self-rescheduling when
+`.autopilot/HALT` appears or STATE `status:` becomes `halted` /
+`mvp-complete` / `stagnation on <gate>` / `env-broken`.
+
+**Fallback** (no `/loop`): paste RUN.txt body directly. Loop runs one
+iteration, exits, and you re-paste after `NEXT_DELAY` seconds.
 
 Operator controls:
 

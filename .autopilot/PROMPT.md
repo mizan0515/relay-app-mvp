@@ -532,8 +532,30 @@ Before exit, in order:
 
 ## Runner-agnostic invocation
 
-The runner supplies the AI session + sleep/resubmit loop. Paste `.autopilot/RUN.txt` into
-Claude Code to advance one iteration.
+The runner supplies the AI session + sleep/resubmit loop. Two supported shapes:
+
+**Preferred — Claude Code `/loop` dynamic mode:** operator runs
+`/loop <paste RUN.txt body>` once. Each iteration, *after* the exit-contract
+steps (STATE save, METRICS line, LOCK remove, NEXT_DELAY write), call the
+`ScheduleWakeup` tool with `delaySeconds = <value just written to
+NEXT_DELAY>` and `prompt = <RUN.txt body verbatim>`. Omitting the call
+terminates the loop. MUST omit (do not self-reschedule) when:
+
+- `.autopilot/HALT` exists at exit, or
+- STATE `status:` is `halted` / `mvp-complete` / `stagnation on <gate>` /
+  `env-broken` / `probation-revert`.
+
+`reason` field: one short sentence, e.g. `"active just completed: polling for
+rotation-carry-forward build"`, `"idle-upkeep done: next tick is BACKLOG
+refresh"`. This is user-visible in the `/loop` UI.
+
+**Fallback — manual paste:** operator pastes RUN.txt body into Claude Code,
+loop runs one iteration and exits. Operator re-pastes after NEXT_DELAY
+seconds. Identical behavior minus the self-reschedule call.
+
+NEXT_DELAY is written either way — it is the canonical cadence record. The
+ScheduleWakeup call is just the automation that re-fires the same prompt at
+that cadence.
 
 ---
 
