@@ -2,14 +2,14 @@
 
 root: .
 base: main
-iteration: 94
-status: review-wait  # iter94: PR #58 G1 flip 관리자 확인 대기 (OPEN)
-idle_upkeep_streak: 1
-next_iter_unblock_plan: iter95 — PR #58 관리자 머지 시 main 동기화 + 대시보드 MVP-완주 헤더 갱신
-backlog: .autopilot/BACKLOG.md (B1·B2·B3·B4·B5·B6·B7·B9·B12·B13·B13.1·B14·B15 DONE · B11 CLOSED · B10 SPEC-LANDED · active=B8 blocked)
-open_autopilot_prs: [58]  # iter94: G1 flip PR 아직 OPEN
-merged_since_last_iter: []  # iter94: 변동 없음
-mvp_gates: 8/8 pending PR #58 flip-in confirmation (모든 G1 단계 착륙 완료)
+iteration: 95
+status: mvp-complete  # iter95: 🎉🎉🎉 PR #58 MERGED — MVP 8/8 완주
+idle_upkeep_streak: 0
+next_iter_unblock_plan: iter96 — post-MVP 백로그 정리 (B16/B17/B18 운영자 승인 대기) · idle-upkeep
+backlog: .autopilot/BACKLOG.md (B1·B2·B3·B4·B5·B6·B7·B9·B12·B13·B13.1·B14·B15 DONE · B11 CLOSED · B10 SPEC-LANDED · active=B8 blocked · post-MVP B16/B17/B18)
+open_autopilot_prs: []  # iter95: PR #58 머지 완료
+merged_since_last_iter: [58]  # iter95: 🎉 G1 flip PR 관리자 머지 → MVP 8/8
+mvp_gates: 8/8 🎉🎉🎉 COMPLETE (PR #58 merged 2026-04-18T20:12Z · commit 0da8b0d)
 
 # 영구 OPERATOR 지시 (2026-04-18 chat) — 모든 future iter 준수:
 #   "핵심문서 변경만 관리자 한국어 PR 확인, 나머지는 자동 머지.
