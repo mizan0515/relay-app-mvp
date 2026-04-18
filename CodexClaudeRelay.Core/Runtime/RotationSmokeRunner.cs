@@ -65,6 +65,46 @@ public static class RotationSmokeRunner
             pending: new[] { "Assert production `- goal:` / `### Completed` shape." },
             constraints: new[] { "Headless only — no broker State." });
 
+        // G6 — drive the production rolling-summary writer headlessly
+        // and assert on-disk bytes, path shape, and event payload.
+        var summaryFields = new RollingSummaryFields(
+            SessionId: "smoke-session",
+            SegmentNumber: 99,
+            RotationReason: "rotation-smoke headless exercise",
+            SessionStartedAt: DateTimeOffset.Now.AddMinutes(-5),
+            TurnsSinceLastRotation: 42,
+            ActiveSideAtRotation: RelaySide.Codex,
+            TotalInputTokens: 1234,
+            TotalOutputTokens: 567,
+            TotalCacheReadInputTokens: 89,
+            TotalCacheCreationInputTokens: 10,
+            TotalCostClaudeUsd: 0.0123,
+            TotalCostCodexUsd: 0.0456,
+            LastHandoff: null,
+            PendingPrompt: null);
+
+        var summaryBaseDir = RollingSummaryWriter.ResolveBaseDirectory();
+        var summaryExpectedPath = RollingSummaryWriter.ResolvePath(
+            summaryBaseDir, summaryFields.SessionId, summaryFields.SegmentNumber);
+        try { if (File.Exists(summaryExpectedPath)) File.Delete(summaryExpectedPath); }
+        catch { /* best-effort cleanup; assertions below will catch a stale file */ }
+
+        // App.OnStartup runs on the WPF UI thread; .GetAwaiter().GetResult()
+        // directly on the async WriteAsync would deadlock the dispatcher while
+        // the continuation waits to resume on the same captured context.
+        // Task.Run hops to the thread pool so the async IO can complete.
+        var summaryResult = Task.Run(
+            () => RollingSummaryWriter.WriteAsync(summaryFields, CancellationToken.None))
+            .GetAwaiter().GetResult();
+        var summaryPayload = RollingSummaryWriter.BuildGeneratedEventPayload(
+            summaryResult.Path, summaryResult.Bytes,
+            summaryFields.SegmentNumber, summaryFields.SessionId,
+            summaryFields.TurnsSinceLastRotation,
+            summaryFields.TotalCostClaudeUsd, summaryFields.TotalCostCodexUsd);
+        var summaryOnDiskBytes = File.Exists(summaryResult.Path)
+            ? new FileInfo(summaryResult.Path).Length
+            : -1;
+
         var checks = new (string Name, bool Pass)[]
         {
             // G7 — carry-forward rendering
@@ -98,11 +138,31 @@ public static class RotationSmokeRunner
                 produced?.Contains("### Pending") == true),
             ("production block has ### Constraints heading",
                 produced?.Contains("### Constraints") == true),
+            // G6 — RollingSummaryWriter on-disk + payload shape
+            ("summary file exists on disk", summaryOnDiskBytes >= 0),
+            ("summary on-disk bytes match result (+ optional UTF-8 BOM)",
+                summaryOnDiskBytes == summaryResult.Bytes
+                || summaryOnDiskBytes == summaryResult.Bytes + 3),
+            ("summary markdown has session header",
+                summaryResult.Markdown.Contains($"# Session {summaryFields.SessionId}")),
+            ("summary markdown has Cumulative totals heading",
+                summaryResult.Markdown.Contains("## Cumulative totals")),
+            ("summary markdown has rotation reason line",
+                summaryResult.Markdown.Contains($"- Rotation reason: {summaryFields.RotationReason}")),
+            ("summary markdown has no-handoff fallback",
+                summaryResult.Markdown.Contains("- (no handoff captured this segment)")),
+            ("summary.generated payload has path key",
+                summaryPayload.Contains("\"path\":\"")),
+            ("summary.generated payload has bytes field",
+                summaryPayload.Contains($"\"bytes\":{summaryResult.Bytes}")),
+            ("summary.generated payload has segment=99",
+                summaryPayload.Contains("\"segment\":99")),
         };
 
         var summary = new StringBuilder();
-        summary.AppendLine("rotation-smoke (G5 repair contract + G7 carry-forward prompt injection)");
+        summary.AppendLine("rotation-smoke (G5 repair + G6 rolling summary + G7 carry-forward)");
         summary.AppendLine($"turn prompt bytes: {rendered.Length}   repair prompt bytes: {repair.Length}");
+        summary.AppendLine($"summary path: {summaryResult.Path}   bytes: {summaryResult.Bytes}");
         var failed = 0;
         foreach (var (name, pass) in checks)
         {
