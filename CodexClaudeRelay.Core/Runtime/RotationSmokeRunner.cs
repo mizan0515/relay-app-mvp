@@ -44,8 +44,19 @@ public static class RotationSmokeRunner
 
         var rendered = RelayPromptBuilder.BuildTurnPrompt(ctx);
 
+        var repairCtx = new RelayRepairContext(
+            SessionId: "smoke-session",
+            TurnNumber: 2,
+            SourceSide: RelaySide.Codex,
+            OriginalPrompt: "Smoke task — no real work.",
+            OriginalOutput: "...some malformed non-handoff trailing text...",
+            RepairPrompt: "(unused — BuildInteractiveRepairPrompt renders its own).");
+
+        var repair = RelayPromptBuilder.BuildInteractiveRepairPrompt(repairCtx);
+
         var checks = new (string Name, bool Pass)[]
         {
+            // G7 — carry-forward rendering
             ("carry-forward heading present", rendered.Contains("## Carry-forward")),
             ("goal section present", rendered.Contains("**Goal:**")),
             ("completed section present", rendered.Contains("**Completed:**")),
@@ -57,11 +68,18 @@ public static class RotationSmokeRunner
                 rendered.IndexOf("## Carry-forward", StringComparison.Ordinal) >= 0
                 && rendered.IndexOf("## Carry-forward", StringComparison.Ordinal)
                    < rendered.IndexOf(RelayPromptBuilder.HandoffStartMarker, StringComparison.Ordinal)),
+            // G5 — E-spec-2 repair prompt contract
+            ("repair prompt has start marker", repair.Contains(RelayPromptBuilder.HandoffStartMarker)),
+            ("repair prompt has end marker", repair.Contains(RelayPromptBuilder.HandoffEndMarker)),
+            ("repair prompt requires ready=true", repair.Contains("ready=true")),
+            ("repair prompt has Do-NOT rules", repair.Contains("Do NOT")),
+            ("repair prompt forbids echoing previous output",
+                repair.Contains("copy the previous invalid output")),
         };
 
         var summary = new StringBuilder();
-        summary.AppendLine("rotation-smoke (F-impl-3 carry-forward prompt injection)");
-        summary.AppendLine($"rendered bytes: {rendered.Length}");
+        summary.AppendLine("rotation-smoke (G5 repair contract + G7 carry-forward prompt injection)");
+        summary.AppendLine($"turn prompt bytes: {rendered.Length}   repair prompt bytes: {repair.Length}");
         var failed = 0;
         foreach (var (name, pass) in checks)
         {
