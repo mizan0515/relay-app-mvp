@@ -2,14 +2,14 @@
 
 root: .
 base: main
-iteration: 47
+iteration: 48
 status: active
 idle_upkeep_streak: 0
-next_iter_unblock_plan: iter48 — G8 step 2/3. RelayLogEvent.event_hash 필드 추가 + JsonlEventLogWriter 에서 CanonicalHash 로 stamp. protected_paths 미접촉. 목표 LOC ≤120.
-backlog: .autopilot/BACKLOG.md (10 candidates; B2 DONE, B1+B3 op-blocked, B4 IN-PROGRESS, B5-B10 available)
+next_iter_unblock_plan: iter49 — G8 step 3/3. Broker replay-dedup e2e (동일 핸드오프 2회 제출 → AcceptedRelayKeys 로 두 번째 거부 + 이벤트 로그에 해시 라인 1회만) → G8 [ ]→[x] → MVP 7/8.
+backlog: .autopilot/BACKLOG.md (10 candidates; B2 DONE, B1+B3 op-blocked, B4 IN-PROGRESS step 2/3 완료, B5-B10 available)
 open_autopilot_prs: []
-merged_since_last_iter: [48]
-mvp_gates: 6/8 (G2 [x], G3 [x], G4 [x], G5 [x], G6 [x], G7 [x]) + G8 foundation 확보
+merged_since_last_iter: [49]
+mvp_gates: 6/8 (G2 [x], G3 [x], G4 [x], G5 [x], G6 [x], G7 [x]) + G8 event_hash 배선 완료
 
 # 영구 OPERATOR 지시 (2026-04-18 chat) — 모든 future iter 준수:
 #   "핵심문서 변경만 관리자 한국어 PR 확인, 나머지는 자동 머지.
@@ -29,7 +29,7 @@ active_task:
   started_iter: 47
   plan:
     - "DONE iter47: CanonicalHash foundation (PR #48, b5f2dfd · 73/73)"
-    - "iter48: RelayLogEvent.event_hash 필드 + JsonlEventLogWriter stamp 배선 (≤120 LOC)"
+    - "DONE iter48: RelayLogEvent.event_hash + JsonlEventLogWriter stamp (PR #49, a4e103d · 79/79)"
     - "iter49: replay-dedup xunit e2e — 동일 패킷 2회 제출 → state transition 1회 증명 → G8 [ ]→[x]"
 
 last_completed_task_g-bundle:
