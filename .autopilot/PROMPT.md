@@ -325,7 +325,27 @@ IMMUTABLE blocks) to reduce friction. Never touch IMMUTABLE. Never more than
    - `OPERATOR: 정리` ≡ `OPERATOR: run cleanup`
    - `OPERATOR: 집중 <작업>` ≡ `OPERATOR: focus on <작업>`
 
-이 네 규칙을 어긴 iteration은 자기진화 예산으로 재수정해야 한다.
+5. **자동 머지 정책 (관리자 부담 경감)** — PR diff가 `STATE.md`의
+   `protected_paths` 중 어느 하나라도 건드리면 **관리자 리뷰 필수**
+   (auto-merge 금지). 그렇지 않으면 다음 모든 조건 충족 시 자동 머지:
+   - `dotnet build` 0 오류 0 경고
+   - 신규/수정 테스트가 있다면 전부 그린
+   - PR 본문 위험도 배지 🟢 안전 (🟡/🔴은 자동 머지 금지)
+   - `OPERATOR: 리뷰 필수` 스티키 비활성
+   - 실행 명령: `gh pr merge <N> --squash --delete-branch`
+   관리자는 **계약 문서·PROMPT·게이트·훅·tools/·DAD 계약** 변경만 직접 결정.
+   그 외 기능·테스트·버그픽스 PR은 로봇이 자체 머지.
+
+6. **관리자 입장에서 쓰는 PR 본문** — 항상 "비개발자 한국어 고등학생"
+   독자 가정:
+   - 영어 코드·파일명 뒤에 한국어 설명 병기 (예: `RelayBroker.cs(중계기 본체)`)
+   - 무엇이 바뀌나요? → 3줄 이내, 기술용어 최소화
+   - 왜 바꾸나요? → 1줄 (미션·백로그·operator 요청과 연결)
+   - 안 바꾸면 생길 문제? → 1줄
+   - 체크리스트 4개 이하, 관리자가 실제 확인 가능한 사실만
+   - 자동 머지 대상 PR은 본문 말미에 "🤖 자동 머지 예정" 명시
+
+이 여섯 규칙을 어긴 iteration은 자기진화 예산으로 재수정해야 한다.
 
 ---
 
