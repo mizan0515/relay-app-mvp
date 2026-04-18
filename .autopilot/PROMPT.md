@@ -228,17 +228,45 @@ Triggered when `active_task:` in STATE.md is non-null.
 
 ## Idle-upkeep mode
 
-Triggered when no active_task. Tasks:
+Triggered when no active_task, OR when active_task is `awaiting-review`
+and the BACKLOG has no next unblocked item to rotate to.
+
+Tasks:
 
 - Run DAD packet validators (`tools/Validate-DadPacket.ps1` etc.) if
   session artifacts exist.
 - Check contract files for untracked drift (warn only — never edit).
 - Exercise any headless smoke harness that exists and record pass/fail.
 - Scan FINDINGS.md for stale entries.
+- Poll the awaiting-review PR's `mergeable` + `reviewDecision` state;
+  when merged, clear `awaiting-review` and promote the next backlog item.
 
 3 consecutive idle-upkeep iterations → write `status: halted` +
 LAST_HALT_NOTE (NOT a HALT file — this is a mutable rule, not an
 IMMUTABLE:halt condition).
+
+## Awaiting-review mode
+
+Triggered when an active_task opened a PR that is OPEN, not merged, not
+closed. Distinct from idle-upkeep: it does NOT increment
+`idle_upkeep_streak` and does NOT contribute to halt-soft.
+
+Each iteration:
+
+1. Poll the PR state (`gh pr view N`). If merged → clear active_task,
+   transition to Active on the next backlog item; if closed unmerged →
+   emit a FINDINGS entry and transition to Idle-upkeep.
+2. If the BACKLOG has an unblocked next item AND no more than one
+   open autopilot PR already exists, rotate: promote that item to a
+   second active_task (tracked under `parallel_task:` in STATE) and
+   start a new branch on the next iteration. Cap: at most 2
+   simultaneously open autopilot PRs.
+3. Otherwise perform idle-upkeep tasks WITHOUT incrementing the streak.
+
+`awaiting-review` + no other unblocked backlog item + 5 consecutive
+iterations with no PR progress → write `status: halted` + LAST_HALT_NOTE.
+The 5-iteration allowance (vs idle-upkeep's 3) reflects that the review
+bottleneck is external and the autopilot is not spinning wastefully.
 
 ## Brainstorm mode
 
