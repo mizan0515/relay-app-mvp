@@ -2,13 +2,14 @@
 
 root: .
 base: main
-iteration: 26
+iteration: 27
 status: active
 idle_upkeep_streak: 0
-next_iter_unblock_plan: iter27 — G4-PLAN step 1 (turn-packet YAML persister 순수 함수 추가)
+next_iter_unblock_plan: iter28 — G4-PLAN step 2 (브로커 AdvanceAsync/CompleteHandoffAsync에 YAML persister hook + state.json 경로 확인)
 backlog: .autopilot/BACKLOG.md (10 candidates; B2 DONE, B1+B3 op-blocked, B4-B10 available)
 open_autopilot_prs: []
-merged_since_last_iter: []
+merged_since_last_iter:
+  - "35 (G4 step 1/4: 턴 패킷 YAML persister 순수 함수 + xunit 6/6 + 자동 머지)"
 mvp_gates: 2/8 (G2 [x], G3 [x])
 
 # 영구 OPERATOR 지시 (2026-04-18 chat) — 모든 future iter 준수:
@@ -30,7 +31,7 @@ active_task:
   plan_doc: .autopilot/G4-PLAN.md
   plan:
     - "DONE iter26: G4-PLAN.md 작성 (현재 가진 것 vs 부족한 것 정리, 4-iter 실행 순서)"
-    - "iter27: 턴 패킷 YAML persister 순수 함수 (HandoffArtifactPersister 패턴)"
+    - "DONE iter27: TurnPacketYamlPersister 순수 함수 + xunit 6 (PR #35, b64c2e9)"
     - "iter28: 브로커 AdvanceAsync hook + state.json 경로 확인"
     - "iter29: 통합 스모크 테스트 (fake adapter 2개로 라운드트립)"
     - "iter30: G4 [ ]→[~]→[x] 플립"
