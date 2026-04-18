@@ -1716,60 +1716,14 @@ public sealed class RelayBroker
         }
     }
 
-    private string? TryBuildCarryForwardBlock()
-    {
-        if (!State.CarryForwardPending)
-        {
-            return null;
-        }
-
-        var hasContent =
-            !string.IsNullOrWhiteSpace(State.Goal)
-            || State.Completed.Count > 0
-            || State.Pending.Count > 0
-            || State.Constraints.Count > 0
-            || !string.IsNullOrWhiteSpace(State.LastHandoffHash);
-        if (!hasContent)
-        {
-            return null;
-        }
-
-        var sb = new System.Text.StringBuilder();
-        sb.Append("## Carry-forward").Append(Environment.NewLine);
-        if (!string.IsNullOrWhiteSpace(State.LastHandoffHash))
-        {
-            sb.Append("- prior_handoff_hash: ").Append(State.LastHandoffHash).Append(Environment.NewLine);
-        }
-        if (!string.IsNullOrWhiteSpace(State.Goal))
-        {
-            sb.Append("- goal: ").Append(State.Goal).Append(Environment.NewLine);
-        }
-        if (State.Completed.Count > 0)
-        {
-            sb.Append("### Completed").Append(Environment.NewLine);
-            foreach (var item in State.Completed)
-            {
-                sb.Append("- ").Append(item).Append(Environment.NewLine);
-            }
-        }
-        if (State.Pending.Count > 0)
-        {
-            sb.Append("### Pending").Append(Environment.NewLine);
-            foreach (var item in State.Pending)
-            {
-                sb.Append("- ").Append(item).Append(Environment.NewLine);
-            }
-        }
-        if (State.Constraints.Count > 0)
-        {
-            sb.Append("### Constraints").Append(Environment.NewLine);
-            foreach (var item in State.Constraints)
-            {
-                sb.Append("- ").Append(item).Append(Environment.NewLine);
-            }
-        }
-        return sb.ToString();
-    }
+    private string? TryBuildCarryForwardBlock() =>
+        CodexClaudeRelay.Core.Protocol.CarryForwardRenderer.TryBuild(
+            State.CarryForwardPending,
+            State.LastHandoffHash,
+            State.Goal,
+            State.Completed,
+            State.Pending,
+            State.Constraints);
 
     private string BuildRollingSummaryMarkdown(int segmentNumber, string rotationReason)
     {

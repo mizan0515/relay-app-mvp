@@ -54,6 +54,17 @@ public static class RotationSmokeRunner
 
         var repair = RelayPromptBuilder.BuildInteractiveRepairPrompt(repairCtx);
 
+        // Drive the production carry-forward serializer directly (not the
+        // pre-rendered passthrough above) so G7 semantic evidence covers
+        // the real State -> markdown path, not just marker ordering.
+        var produced = CarryForwardRenderer.TryBuild(
+            carryForwardPending: true,
+            lastHandoffHash: "deadbeef0000000000000000",
+            goal: "Smoke-validate production carry-forward serializer.",
+            completed: new[] { "Extracted CarryForwardRenderer from RelayBroker." },
+            pending: new[] { "Assert production `- goal:` / `### Completed` shape." },
+            constraints: new[] { "Headless only — no broker State." });
+
         var checks = new (string Name, bool Pass)[]
         {
             // G7 — carry-forward rendering
@@ -75,6 +86,18 @@ public static class RotationSmokeRunner
             ("repair prompt has Do-NOT rules", repair.Contains("Do NOT")),
             ("repair prompt forbids echoing previous output",
                 repair.Contains("copy the previous invalid output")),
+            // G7 — production CarryForwardRenderer output shape
+            ("production block rendered", produced is not null),
+            ("production block has heading", produced?.Contains("## Carry-forward") == true),
+            ("production block has prior_handoff_hash line",
+                produced?.Contains("- prior_handoff_hash: deadbeef0000000000000000") == true),
+            ("production block has - goal: line", produced?.Contains("- goal:") == true),
+            ("production block has ### Completed heading",
+                produced?.Contains("### Completed") == true),
+            ("production block has ### Pending heading",
+                produced?.Contains("### Pending") == true),
+            ("production block has ### Constraints heading",
+                produced?.Contains("### Constraints") == true),
         };
 
         var summary = new StringBuilder();
