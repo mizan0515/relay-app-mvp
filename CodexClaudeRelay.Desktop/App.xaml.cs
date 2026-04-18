@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
+using CodexClaudeRelay.Core.Runtime;
 
 namespace CodexClaudeRelay.Desktop;
 
@@ -9,6 +10,8 @@ namespace CodexClaudeRelay.Desktop;
 /// </summary>
 public partial class App : Application
 {
+    private const string RotationSmokeSwitch = "--rotation-smoke";
+
     private static readonly string CrashDirectory = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "CodexClaudeRelayMvp");
@@ -18,6 +21,33 @@ public partial class App : Application
         DispatcherUnhandledException += App_DispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
         TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;
+    }
+
+    protected override void OnStartup(StartupEventArgs e)
+    {
+        if (e.Args.Any(a => string.Equals(a, RotationSmokeSwitch, StringComparison.Ordinal)))
+        {
+            var result = RotationSmokeRunner.Run();
+            WriteSmokeResult(result);
+            Shutdown(result.ExitCode);
+            return;
+        }
+
+        base.OnStartup(e);
+    }
+
+    private static void WriteSmokeResult(RotationSmokeRunner.Result result)
+    {
+        try
+        {
+            Directory.CreateDirectory(CrashDirectory);
+            var path = Path.Combine(CrashDirectory, "rotation-smoke.log");
+            File.WriteAllText(path, result.Summary);
+        }
+        catch
+        {
+            // Log write is best-effort; exit code still communicates pass/fail.
+        }
     }
 
     private void App_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
