@@ -2,13 +2,13 @@
 
 root: .
 base: main
-iteration: 42
+iteration: 43
 status: active
 idle_upkeep_streak: 0
-next_iter_unblock_plan: iter43 — G8 (audit log integrity) 계획 수립 OR G4/G5/G6 [x] 번들 follow-up (fake-adapter harness 공유).
+next_iter_unblock_plan: iter44 — G4 [~]→[x] 브로커 routing e2e (CannedAdapter 쌍 + turn-1/2.yaml + state.json + alternating ActiveAgent 증명).
 backlog: .autopilot/BACKLOG.md (10 candidates; B2 DONE, B1+B3 op-blocked, B4-B10 available)
 open_autopilot_prs: []
-merged_since_last_iter: [44]
+merged_since_last_iter: []
 mvp_gates: 3/8 (G2 [x], G3 [x], G7 [x], G4 [~], G5 [~], G6 [~])
 
 # 영구 OPERATOR 지시 (2026-04-18 chat) — 모든 future iter 준수:
@@ -22,14 +22,17 @@ operator_directives_sticky:
   - "매 iter 행적은 HISTORY.md + 대시보드.md + METRICS.jsonl에 남긴다"
 
 active_task:
-  slug: null
+  slug: g-bundle-follow-up
   pr: null
   branch: null
-  gate: null
-  started_iter: null
-  plan_doc: null
+  gate: G4/G5/G6
+  started_iter: 43
+  plan_doc: .autopilot/G-BUNDLE-PLAN.md
   plan:
-    - "iter43: G8 audit log integrity 계획 OR G4/G5/G6 [x] 번들 follow-up 선정"
+    - "DONE iter43: G-BUNDLE-PLAN.md 작성 (3-iter 로드맵 · 코드 변경 없음)"
+    - "iter44: G4 [~]→[x] 브로커 routing e2e (CannedAdapter + turn yaml round-trip)"
+    - "iter45: G5 [~]→[x] recovery_resume e2e (continued_from_resume 실증)"
+    - "iter46: G6 [~]→[x] rotation smoke (summary.generated + carry-forward 주입)"
 
 last_completed_task_g7:
   slug: g7-consensus-convergence
