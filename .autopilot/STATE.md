@@ -2,13 +2,13 @@
 
 root: .
 base: main
-iteration: 61
+iteration: 62
 status: active
-idle_upkeep_streak: 0  # iter61: 🎉 관리자 G1 답변 접수 (1:b · 2:e · 3:승인) → G1 언블록
-next_iter_unblock_plan: iter62 — G1 스프린트 착수. 순서 (1) B1 PacketIO.Read/Write + Core.Tests 라운드트립 브랜치 `autopilot/g1-peer-symmetric-packet-io` / (2) validator 포팅 (b) — en/ko Validate-Dad*.ps1 스크래핑 → `tools/Validate-Dad-Packet.ps1` (protected → 한국어 PR) / (3) B3 AgentCostAdvisor 대칭화 (e) / (4) CLAUDE.md 서두 정정 (승인). 2~4 iter 내 G1 [x] flip 목표.
-backlog: .autopilot/BACKLOG.md (B2·B4·B5·B6·B7·B9·B12·B13·B13.1·B14·B15 DONE · B11 CLOSED · B10 SPEC-LANDED · active=B1·B3·B8; B1·B3 언블록 완료)
+idle_upkeep_streak: 0  # iter62: G1 스프린트 1단계 완료 — PR #52 MERGED (PacketIO round-trip)
+next_iter_unblock_plan: iter63 — G1 스프린트 2단계. validator 포팅 (b) — `D:\dad-v2-system-template\{en,ko}\tools\Validate-Dad*.ps1` 스크래핑 → `tools/Validate-Dad-Packet.ps1` 착륙 (protected → 한국어 PR · 관리자 리뷰 필수). 이후 (3) B3 AgentCostAdvisor 대칭화, (4) CLAUDE.md 서두 정정.
+backlog: .autopilot/BACKLOG.md (B1·B2·B4·B5·B6·B7·B9·B12·B13·B13.1·B14·B15 DONE · B11 CLOSED · B10 SPEC-LANDED · active=B3·B8)
 open_autopilot_prs: []
-merged_since_last_iter: []
+merged_since_last_iter: [52, 5e916d6]
 mvp_gates: 7/8 (G2·G3·G4·G5·G6·G7·G8 [x]); G1 op-blocked
 
 # 영구 OPERATOR 지시 (2026-04-18 chat) — 모든 future iter 준수:
