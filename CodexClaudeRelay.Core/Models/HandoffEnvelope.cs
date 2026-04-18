@@ -51,4 +51,10 @@ public sealed record HandoffEnvelope
 
     [JsonPropertyName("closeout_kind")]
     public string CloseoutKind { get; init; } = Models.CloseoutKind.PeerHandoff;
+
+    [JsonPropertyName("suggest_done")]
+    public bool SuggestDone { get; init; }
+
+    [JsonPropertyName("done_reason")]
+    public string DoneReason { get; init; } = string.Empty;
 }
