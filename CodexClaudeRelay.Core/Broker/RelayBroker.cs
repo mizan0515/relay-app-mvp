@@ -734,9 +734,8 @@ public sealed class RelayBroker
         {
             var packet = TurnPacketAdapter.FromHandoffEnvelope(handoff);
             await EmitCheckpointVerifiedAsync(packet, handoff.Source, cancellationToken);
-            var path = Path.Combine(
-                "Document", "dialogue", "sessions", handoff.SessionId,
-                $"turn-{handoff.Turn}-handoff.md");
+            var sessionDir = Path.Combine("Document", "dialogue", "sessions", handoff.SessionId);
+            var path = Path.Combine(sessionDir, $"turn-{handoff.Turn}-handoff.md");
             var bytes = await HandoffArtifactPersister.WriteAsync(packet, path, cancellationToken);
             await _eventLogWriter.AppendAsync(
                 State.SessionId,
@@ -745,6 +744,30 @@ public sealed class RelayBroker
                     "handoff_written",
                     handoff.Source,
                     $"Handoff artifact written to {path} ({bytes} bytes)."),
+                cancellationToken);
+
+            var yamlPath = Path.Combine(sessionDir, $"turn-{handoff.Turn}.yaml");
+            var yamlBytes = await TurnPacketYamlPersister.WriteAsync(packet, yamlPath, cancellationToken);
+            await _eventLogWriter.AppendAsync(
+                State.SessionId,
+                new RelayLogEvent(
+                    DateTimeOffset.Now,
+                    "packet_written",
+                    handoff.Source,
+                    $"Turn packet YAML written to {yamlPath} ({yamlBytes} bytes)."),
+                cancellationToken);
+
+            var statePath = Path.Combine(sessionDir, "state.json");
+            var snapshot = new SessionStateSnapshot(
+                State.SessionId, State.CurrentTurn, State.ActiveAgent, State.UpdatedAt);
+            var stateBytes = await SessionStatePersister.WriteAsync(snapshot, statePath, cancellationToken);
+            await _eventLogWriter.AppendAsync(
+                State.SessionId,
+                new RelayLogEvent(
+                    DateTimeOffset.Now,
+                    "state_written",
+                    handoff.Source,
+                    $"Session state.json written to {statePath} ({stateBytes} bytes, current_turn={State.CurrentTurn})."),
                 cancellationToken);
         }
         catch (Exception ex)
