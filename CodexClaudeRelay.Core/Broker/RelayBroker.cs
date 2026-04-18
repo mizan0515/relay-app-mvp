@@ -702,7 +702,40 @@ public sealed class RelayBroker
             new RelayLogEvent(DateTimeOffset.Now, "handoff.accepted", handoff.Source, $"Accepted handoff to {handoff.Target}.", handoff.Prompt),
             cancellationToken);
 
+        await WriteHandoffArtifactAsync(handoff, cancellationToken);
+
         return new BrokerAdvanceResult(true, false, repaired, "Handoff accepted and queued for the opposite role.", State);
+    }
+
+    private async Task WriteHandoffArtifactAsync(HandoffEnvelope handoff, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var packet = TurnPacketAdapter.FromHandoffEnvelope(handoff);
+            var path = Path.Combine(
+                "Document", "dialogue", "sessions", handoff.SessionId,
+                $"turn-{handoff.Turn}-handoff.md");
+            var bytes = await HandoffArtifactPersister.WriteAsync(packet, path, cancellationToken);
+            await _eventLogWriter.AppendAsync(
+                State.SessionId,
+                new RelayLogEvent(
+                    DateTimeOffset.Now,
+                    "handoff_written",
+                    handoff.Source,
+                    $"Handoff artifact written to {path} ({bytes} bytes)."),
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            await _eventLogWriter.AppendAsync(
+                State.SessionId,
+                new RelayLogEvent(
+                    DateTimeOffset.Now,
+                    "handoff_write_failed",
+                    handoff.Source,
+                    $"Handoff artifact write failed: {ex.GetType().Name}: {ex.Message}"),
+                cancellationToken);
+        }
     }
 
     private bool TryAcceptHandoff(string rawOutput, out HandoffEnvelope? handoff, out string? failureReason)

@@ -1,0 +1,25 @@
+using CodexClaudeRelay.Core.Models;
+
+namespace CodexClaudeRelay.Core.Protocol;
+
+public static class TurnPacketAdapter
+{
+    public static TurnPacket FromHandoffEnvelope(HandoffEnvelope env)
+    {
+        ArgumentNullException.ThrowIfNull(env);
+
+        return new TurnPacket
+        {
+            From = env.Source,
+            Turn = env.Turn,
+            SessionId = env.SessionId,
+            Handoff = new TurnHandoff
+            {
+                CloseoutKind = CloseoutKind.PeerHandoff,
+                NextTask = env.Prompt,
+                Context = env.Reason,
+                ReadyForPeerVerification = env.Ready,
+            },
+        };
+    }
+}
