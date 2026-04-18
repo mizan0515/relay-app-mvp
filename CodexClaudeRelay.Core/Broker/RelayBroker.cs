@@ -1341,21 +1341,13 @@ public sealed class RelayBroker
         return true;
     }
 
-    private string? EvaluateRotationReason()
-    {
-        if (State.TurnsSinceLastRotation >= _options.MaxTurnsPerSession)
-        {
-            return $"Planned rotation triggered after {State.TurnsSinceLastRotation} turns.";
-        }
-
-        var sessionAge = DateTimeOffset.Now - State.SessionStartedAt;
-        if (sessionAge >= _options.MaxSessionDuration)
-        {
-            return $"Planned rotation triggered after {sessionAge:mm\\:ss}.";
-        }
-
-        return null;
-    }
+    private string? EvaluateRotationReason() =>
+        CodexClaudeRelay.Core.Runtime.RotationEvaluator.Evaluate(
+            State.TurnsSinceLastRotation,
+            _options.MaxTurnsPerSession,
+            State.SessionStartedAt,
+            _options.MaxSessionDuration,
+            DateTimeOffset.Now);
 
     private async Task RotateSessionAsync(string reason, CancellationToken cancellationToken)
     {

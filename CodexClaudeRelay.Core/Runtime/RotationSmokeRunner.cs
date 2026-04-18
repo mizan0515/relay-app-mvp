@@ -105,6 +105,39 @@ public static class RotationSmokeRunner
             ? new FileInfo(summaryResult.Path).Length
             : -1;
 
+        // G8 — rotation boundary evaluation (drives the production
+        // RotationEvaluator extracted from RelayBroker.EvaluateRotationReason
+        // at maxTurns-1 / maxTurns / maxTurns+1 and across MaxSessionDuration).
+        const int rotMaxTurns = 3;
+        var rotMaxDuration = TimeSpan.FromMinutes(15);
+        var rotNow = new DateTimeOffset(2026, 4, 18, 12, 0, 0, TimeSpan.Zero);
+        var rotFreshStart = rotNow.AddSeconds(-30);
+        var rotAgedStart = rotNow.AddMinutes(-16);
+        var rotBelow = RotationEvaluator.Evaluate(
+            turnsSinceLastRotation: rotMaxTurns - 1,
+            maxTurnsPerSession: rotMaxTurns,
+            sessionStartedAt: rotFreshStart,
+            maxSessionDuration: rotMaxDuration,
+            now: rotNow);
+        var rotAt = RotationEvaluator.Evaluate(
+            turnsSinceLastRotation: rotMaxTurns,
+            maxTurnsPerSession: rotMaxTurns,
+            sessionStartedAt: rotFreshStart,
+            maxSessionDuration: rotMaxDuration,
+            now: rotNow);
+        var rotAbove = RotationEvaluator.Evaluate(
+            turnsSinceLastRotation: rotMaxTurns + 5,
+            maxTurnsPerSession: rotMaxTurns,
+            sessionStartedAt: rotFreshStart,
+            maxSessionDuration: rotMaxDuration,
+            now: rotNow);
+        var rotAged = RotationEvaluator.Evaluate(
+            turnsSinceLastRotation: 0,
+            maxTurnsPerSession: rotMaxTurns,
+            sessionStartedAt: rotAgedStart,
+            maxSessionDuration: rotMaxDuration,
+            now: rotNow);
+
         var checks = new (string Name, bool Pass)[]
         {
             // G7 — carry-forward rendering
@@ -157,10 +190,21 @@ public static class RotationSmokeRunner
                 summaryPayload.Contains($"\"bytes\":{summaryResult.Bytes}")),
             ("summary.generated payload has segment=99",
                 summaryPayload.Contains("\"segment\":99")),
+            // G8 — rotation-evaluator boundary semantics
+            ("rotation below maxTurns yields no reason", rotBelow is null),
+            ("rotation at maxTurns yields planned reason",
+                rotAt is not null && rotAt.Contains($"after {rotMaxTurns} turns")),
+            ("rotation above maxTurns yields planned reason",
+                rotAbove is not null && rotAbove.Contains("Planned rotation triggered")),
+            ("rotation turns-trigger precedes duration text",
+                rotAt is not null && rotAt.Contains("turns") && !rotAt.Contains(":")),
+            ("aged session triggers duration rotation even at 0 turns",
+                rotAged is not null && rotAged.Contains("Planned rotation triggered")
+                && !rotAged.Contains(" turns.")),
         };
 
         var summary = new StringBuilder();
-        summary.AppendLine("rotation-smoke (G5 repair + G6 rolling summary + G7 carry-forward)");
+        summary.AppendLine("rotation-smoke (G5 repair + G6 rolling summary + G7 carry-forward + G8 rotation boundary)");
         summary.AppendLine($"turn prompt bytes: {rendered.Length}   repair prompt bytes: {repair.Length}");
         summary.AppendLine($"summary path: {summaryResult.Path}   bytes: {summaryResult.Bytes}");
         var failed = 0;
