@@ -43,6 +43,41 @@ Gate definition (MVP-GATES.md):
    - runs turn-2 where the fake adapter writes `continued_from_resume=true`,
    - asserts final state reflects uninterrupted session continuity.
 
+## iter execution order — STATUS
+
+- **iter 31 DONE**: G5-PLAN.md 작성.
+- **iter 32 DONE**: `HandoffEnvelope.closeout_kind` 필드 + `TurnPacketAdapter`
+  매핑 + xunit 1 fact (PR #38, 9e087fa).
+- **iter 33 DONE**: 브로커 `CompleteHandoffAsync` recovery_resume 분기 +
+  `RecoveryResumePromptBuilder` (프리앰블 상수 + Compose) + xunit 3 facts
+  (PR #39, 0b94f25). 37/37.
+- **iter 34 DONE**: G5 `[ ]` → `[~]` (this iter). MVP-GATES.md 증거 스택
+  기록. 단위 레이어 전 구간 검증 완료.
+
+## Follow-up for G5 `[~]` → `[x]`
+
+The broker branch is proven by unit tests, but an end-to-end smoke driving
+the full advance cycle (session start → turn-1 with recovery_resume →
+turn-2 with continued_from_resume marker) has not been written. The harness
+required is the same as G4 `[x]` follow-up:
+
+1. Fake `IRelayAdapter` pair whose `RunTurnAsync` returns a canned
+   `dad_handoff` envelope with `closeout_kind: recovery_resume`.
+2. In-memory `IRelaySessionStore` + `IEventLogWriter`.
+3. Test harness: `StartSessionAsync` → `AdvanceAsync` (returns
+   recovery_resume handoff) → assert `session.recovery_resume` event fired +
+   next `PendingPrompt` starts with preamble + `CarryForwardPending=true`.
+4. Second `AdvanceAsync` with fake adapter that writes a packet containing
+   `my_work.continued_from_resume: true`, assert final state matches gate
+   definition.
+
+Scope ≈180 LOC. **Bundle with G4 `[x]` follow-up** — same fakes/harness can
+serve both gates (just vary closeout_kind in the turn-1 handoff).
+Schedule: next iter block once plan is approved, OR defer until G6/G7
+sequencing decided.
+
+## --- historical plan (obsolete, preserved for audit) ---
+
 ## iter execution order (target 3 iters)
 
 - **iter 32**: extend `HandoffEnvelope` with `closeout_kind` (default

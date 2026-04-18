@@ -2,14 +2,14 @@
 
 root: .
 base: main
-iteration: 33
+iteration: 34
 status: active
 idle_upkeep_streak: 0
-next_iter_unblock_plan: iter34 — G5 step 3/3 (end-to-end 스모크 fake IRelayAdapter 쌍 + G5 [ ]→[~]→[x] 플립, ≤120 LOC)
+next_iter_unblock_plan: iter35 — G6 착수 (rolling summary + carry-forward) 계획 문서, 또는 G4+G5 [x] bundled follow-up (fake-adapter harness ~180 LOC)
 backlog: .autopilot/BACKLOG.md (10 candidates; B2 DONE, B1+B3 op-blocked, B4-B10 available)
 open_autopilot_prs: []
 merged_since_last_iter: []
-mvp_gates: 2/8 (G2 [x], G3 [x], G4 [~])
+mvp_gates: 2/8 (G2 [x], G3 [x], G4 [~], G5 [~])
 
 # 영구 OPERATOR 지시 (2026-04-18 chat) — 모든 future iter 준수:
 #   "핵심문서 변경만 관리자 한국어 PR 확인, 나머지는 자동 머지.
@@ -32,7 +32,8 @@ active_task:
     - "DONE iter31: G5-PLAN.md 작성 (기존 인프라 파악, 3-iter 실행 순서)"
     - "DONE iter32: HandoffEnvelope.closeout_kind + TurnPacketAdapter 매핑 + xunit 1 fact (PR #38, 9e087fa)"
     - "DONE iter33: 브로커 recovery_resume 분기 + RecoveryResumePromptBuilder + xunit 3 facts (PR #39, 0b94f25)"
-    - "iter34: end-to-end 스모크 (fake adapter) + G5 [ ]→[~]→[x] 플립"
+    - "DONE iter34: G5 [ ]→[~] 플립 (MVP-GATES.md 증거 스택 기록) + G5-PLAN.md follow-up"
+    - "iter35+: G5 [~]→[x] — fake-adapter harness (G4 [x]와 번들 권장)"
 
 parked_task_g4:
   slug: g4-round-trip-automated

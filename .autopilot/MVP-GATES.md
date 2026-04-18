@@ -74,12 +74,26 @@ reversion is a rule break.
   Deferred to follow-up iter; artifact-layer evidence is sufficient for `[~]`.
 
 ## G5 — recovery_resume protocol
-- [ ] When a turn ends with `closeout_kind: recovery_resume` (context
+- [~] When a turn ends with `closeout_kind: recovery_resume` (context
       overflow), the broker loads `.prompts/04-session-recovery-resume.md`,
       injects `open_risks` + empty `prompt_artifact` handling, and the next
       agent continues without loss of `my_work` state.
 - Evidence: a resume cycle — turn with recovery_resume closeout → successful
   turn-{N+1} with `my_work.continued_from_resume: true`.
+- 2026-04-18 — G5 `[ ]` → `[~]`. Evidence stack:
+  · PR #38 (9e087fa) — `HandoffEnvelope.CloseoutKind` 필드 +
+    `TurnPacketAdapter` 매핑 + xunit 1 fact (recovery_resume round-trip).
+  · PR #39 (0b94f25) — `RelayBroker.CompleteHandoffAsync` recovery_resume
+    분기: `RecoveryResumePromptBuilder`로 다음 턴 `PendingPrompt` 앞에
+    재개 프리앰블(프롬프트 04 참조 + continued_from_resume 마커 텍스트)
+    prepend, `State.CarryForwardPending=true`, `session.recovery_resume`
+    로그 이벤트 발행. xunit 3 facts.
+  · Test suite: 37/37 통과 on main.
+- Remaining for `[x]`: broker-driven end-to-end smoke (fake IRelayAdapter
+  쌍 + in-memory store) 가 recovery_resume 한 사이클 후 다음 턴 패킷에
+  `my_work.continued_from_resume: true`가 실제로 실림을 증명. G4 `[~]→[x]`
+  follow-up(같은 fake-adapter harness)과 번들 권장. 단위 레이어 증거는
+  `[~]` 충족.
 
 ## G6 — Rolling summary + carry-forward injection
 - [ ] At session rotation (turn/time/token trigger), broker writes a
