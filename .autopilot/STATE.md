@@ -2,10 +2,10 @@
 
 root: .
 base: main
-iteration: 56
+iteration: 57
 status: active
-idle_upkeep_streak: 0  # PR #51 리뷰 대기 (폴링 2회) — 차단 사유 명확하므로 halt 아님
-next_iter_unblock_plan: iter57 — PR #51(B15) 폴링 3회째. 여전히 reviewDecision 빈 값 · mergeStateStatus UNKNOWN · comments 비어있음. 리뷰 대기는 차단 사유 명확하므로 PROMPT halt 규칙 대상 아님(blocked-on-operator ≠ ambiguous-drift). iter57 에서도 변화 없으면 idle-upkeep 재개하여 B11/B13 follow-up 등 작은 개선 지속.
+idle_upkeep_streak: 0  # PR #51 리뷰 대기 병행 · iter57 에 B13.1 regen script 착륙
+next_iter_unblock_plan: iter58 — PR #51 폴링 4회째 + 추가 작은 개선(B15 후 보조 작업 or idle-upkeep). 여전히 reviewDecision=""/comments=[]. iter57 에서 B13.1 regen 스크립트 main 직접 커밋(non-protected .autopilot/regen-histogram.py). iter58 후보 — (a) 재생성 스크립트를 exit-contract 훅에 붙이는 후속(PROMPT 규칙 수정 필요 → protected 이라 미정) / (b) idle-upkeep 계속.
 backlog: .autopilot/BACKLOG.md (B2·B4·B5·B6·B7·B9·B12·B13·B14 DONE · B11 CLOSED · B15 IN-REVIEW · active=B1·B3·B10·B8)
 open_autopilot_prs: [51]
 merged_since_last_iter: [50, 61a55a4]
