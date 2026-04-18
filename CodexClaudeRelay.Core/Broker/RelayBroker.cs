@@ -710,14 +710,38 @@ public sealed class RelayBroker
             }
         }
         State.Constraints = carriedConstraints;
-        State.PendingPrompt = handoff.Prompt;
+        var isRecoveryResume = string.Equals(
+            handoff.CloseoutKind,
+            CloseoutKind.RecoveryResume,
+            StringComparison.Ordinal);
+
+        State.PendingPrompt = isRecoveryResume
+            ? RecoveryResumePromptBuilder.Compose(handoff.Prompt)
+            : handoff.Prompt;
         State.ActiveAgent = handoff.Target;
         State.CurrentTurn++;
         State.TurnsSinceLastRotation++;
         State.RepairAttempts = 0;
         State.PendingApproval = null;
         State.LastError = null;
+        if (isRecoveryResume)
+        {
+            State.CarryForwardPending = true;
+        }
         State.UpdatedAt = DateTimeOffset.Now;
+
+        if (isRecoveryResume)
+        {
+            await _eventLogWriter.AppendAsync(
+                State.SessionId,
+                new RelayLogEvent(
+                    DateTimeOffset.Now,
+                    "session.recovery_resume",
+                    handoff.Source,
+                    $"Recovery resume requested. Turn {handoff.Turn} closed with recovery_resume; next agent {handoff.Target} receives resume preamble.",
+                    handoff.Reason),
+                cancellationToken);
+        }
 
         await PersistAndLogAsync(
             new RelayLogEvent(DateTimeOffset.Now, "handoff.accepted", handoff.Source, $"Accepted handoff to {handoff.Target}.", handoff.Prompt),
