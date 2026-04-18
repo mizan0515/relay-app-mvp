@@ -198,12 +198,28 @@ reversion is a rule break.
     Converged 상태 + backlog.json 실물 + 두 이벤트 모두 assert됨.
 
 ## G8 — Audit log integrity
-- [ ] Every turn packet I/O, handoff artifact write, and state transition
+- [x] Every turn packet I/O, handoff artifact write, and state transition
       emits a JSONL event with canonical SHA-256 hash. Replay of the same
       handoff does NOT produce duplicate state transitions (dedup via
       `AcceptedRelayKeys`). Event log survives process crash.
 - Evidence: logs/*.jsonl tail showing hash-stamped events for a turn +
   demonstration of dedup (same packet submitted twice → one transition).
+- 2026-04-19 — G8 `[ ]` → `[x]`. iter47-49 3-step landing:
+  · iter47 / PR #48 (b5f2dfd): `CodexClaudeRelay.Core/Protocol/CanonicalHash.cs`
+    순수 `OfString`/`OfBytes`/`Normalize`. 정규화 규칙 동결(CRLF/CR→LF · 라인말
+    공백 strip · 말미 newline trim). `CanonicalHashTests` 9 facts.
+  · iter48 / PR #49 (a4e103d): `RelayLogEvent.EventHash` 필드(`event_hash`
+    JSON name). `JsonlEventLogWriter.AppendAsync` 가 `session|ts|type|role|
+    msg|payload` 정규 결합 문자열의 CanonicalHash 를 stamp; preset 값은 보존.
+    `ComputeEventHash` public static. `JsonlEventLogWriterTests` 6 facts.
+    55개 기존 RelayLogEvent 생성자 호출 전부 무수정 호환.
+  · iter49 / PR #50 (769274a): `BrokerReplayDedupE2ETests` 2 facts.
+    (a) 정상 Advance 후 State.CurrentTurn/ActiveAgent 롤백 → 동일 envelope
+    으로 `CompleteHandoffAsync` 재호출(리플렉션) → "Duplicate handoff
+    detected" + AcceptedRelayKeys 불변. (b) writer 를 using 블록 격리하여
+    2회 append 후 GC → 파일 재오픈으로 2 라인 모두 live + event_hash 동등성
+    검증 (프로세스 crash proxy).
+  · 전체 81/81 통과. 모두 xunit 헤드리스 재현 가능.
 
 ---
 
