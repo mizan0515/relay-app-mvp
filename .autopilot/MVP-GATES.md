@@ -21,6 +21,25 @@ reversion is a rule break.
 
 ---
 
+## Flip digest (reviewer quick view · B15)
+
+한눈에 보는 현재 상태. 자세한 근거는 아래 "Flip history" 원본을 보세요.
+
+| Gate | 현재 | 최신 flip (ISO·PR·commit) | 근거 한 줄 |
+|------|------|--------------------------|-----------|
+| G1 | `[ ]` | — | 운영자 3-결정 대기(`.autopilot/G1-UNBLOCKING-RUNBOOK.md`) |
+| G2 | `[x]` | 2026-04-18 · PR #31 · 6970c43 | `RelayBroker.CompleteHandoffAsync` → `HandoffArtifactPersister` 배선 + 3 xunit |
+| G3 | `[x]` | 2026-04-18 · PR #34 · 46aaa59 | 증거 없는 체크포인트 턴 차단 enforcement + 21 xunit |
+| G4 | `[x]` | 2026-04-19 · PR #45 · 74686ef | `BrokerRoutingRoundTripE2ETests` 2 facts · turn-1/2.yaml + state.json landing |
+| G5 | `[x]` | 2026-04-19 · PR #46 · 162c0ec | `BrokerRecoveryResumeE2ETests` 2 facts · preamble prepend 실증 |
+| G6 | `[x]` | 2026-04-19 · PR #47 · a3ba00a | `BrokerRotationSmokeE2ETests` · summary file + `## Carry-forward` 주입 |
+| G7 | `[x]` | 2026-04-18 · PR #44 · 26949eb | `BrokerConvergenceE2ETests` 2 facts · backlog.json + 2 이벤트 |
+| G8 | `[x]` | 2026-04-19 · PR #50 · 769274a | `BrokerReplayDedupE2ETests` 2 facts · Duplicate handoff 거부 + crash-survival |
+
+**MVP 진행**: **7/8** · 남은 G1 만 운영자 결정 대기. 테스트: **81/81** · 누적 머지: **23건**.
+
+---
+
 ## G1 — Peer-symmetric packet I/O
 - [ ] Broker can read and write `turn-{N}.yaml` conforming to
       `Document/DAD/PACKET-SCHEMA.md` with fields: `type`, `from`,
