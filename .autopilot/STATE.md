@@ -2,13 +2,13 @@
 
 root: .
 base: main
-iteration: 64
+iteration: 65
 status: active
-idle_upkeep_streak: 0  # iter64: G1 3/4 step 1 — PR #54 MERGED (IAgentCostAdvisor scaffold) + PR #53 리뷰 대기 지속
-next_iter_unblock_plan: iter65 — PR #53 리뷰 대기 병행. B3 step 2 (Codex-side 2 메서드 이사 — LogCodexPricingFallbackAsync + LogCodexRateCardStaleAsync → CodexCostAdvisor, Core 자동 머지). 이후 step 3 (Claude 4 메서드) → B3 완료 → CLAUDE.md 서두 정정 (protected · 리뷰).
-backlog: .autopilot/BACKLOG.md (B1·B2·B4·B5·B6·B7·B9·B12·B13·B13.1·B14·B15 DONE · B11 CLOSED · B10 SPEC-LANDED · B3 진행중 step1/3 · active=B3·B8)
+idle_upkeep_streak: 0  # iter65: G1 3/4 step 2 — PR #55 MERGED (CodexCostAdvisor 이사) + PR #53 리뷰 대기 지속
+next_iter_unblock_plan: iter66 — PR #53 리뷰 대기 병행. B3 step 3 (Claude-side 4 메서드 이사 — LogClaudeCostCeilingDisabledAsync + LogCacheInflationSignalAsync + LogCostAvailabilitySignalsAsync + TryRotateForClaudeCostCeilingAsync → ClaudeCostAdvisor, Core 자동 머지). 이후 B3 완료 → CLAUDE.md 서두 정정 (protected · 리뷰) → G1 [x] → MVP 8/8.
+backlog: .autopilot/BACKLOG.md (B1·B2·B4·B5·B6·B7·B9·B12·B13·B13.1·B14·B15 DONE · B11 CLOSED · B10 SPEC-LANDED · B3 진행중 step2/3 · active=B3·B8)
 open_autopilot_prs: [53]
-merged_since_last_iter: [54, 58b6974]
+merged_since_last_iter: [55, 550934d]
 mvp_gates: 7/8 (G2·G3·G4·G5·G6·G7·G8 [x]); G1 op-blocked
 
 # 영구 OPERATOR 지시 (2026-04-18 chat) — 모든 future iter 준수:
