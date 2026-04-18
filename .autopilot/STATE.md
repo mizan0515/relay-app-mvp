@@ -2,11 +2,11 @@
 
 root: .
 base: main
-iteration: 67
-status: active
-idle_upkeep_streak: 0  # iter67: G1 4/4 — PR #57 OPEN (CLAUDE.md 서두 v2 정정, 관리자 리뷰) + PR #53 리뷰 대기 지속
-next_iter_unblock_plan: iter68 — 리뷰 대기 2건(#53 validator, #57 CLAUDE.md) 병행 idle-upkeep. 둘 다 관리자 승인 머지 시 G1 [x] flip → MVP 8/8 완주. 리뷰 무변경 3 iter 연속이면 B10 R-BLOCKED 규칙 후보.
-backlog: .autopilot/BACKLOG.md (B1·B2·B3·B4·B5·B6·B7·B9·B12·B13·B13.1·B14·B15 DONE · B11 CLOSED · B10 SPEC-LANDED · active=B8)
+iteration: 68
+status: idle-upkeep
+idle_upkeep_streak: 1  # iter68: 리뷰 대기 2건 폴링 무변경 (병행 개선 재고 없음 — B8 protected+redundant)
+next_iter_unblock_plan: iter69 — 리뷰 2건(#53 #57) 폴링 지속. 3 iter 연속 무변경이면 B10 R-BLOCKED (Brainstorm 전환) 후보. 승인 머지 시 G1 [x] flip → MVP 8/8.
+backlog: .autopilot/BACKLOG.md (B1·B2·B3·B4·B5·B6·B7·B9·B12·B13·B13.1·B14·B15 DONE · B11 CLOSED · B10 SPEC-LANDED · active=B8 blocked)
 open_autopilot_prs: [53, 57]
 merged_since_last_iter: []
 mvp_gates: 7/8 (G2·G3·G4·G5·G6·G7·G8 [x]); G1 op-blocked
