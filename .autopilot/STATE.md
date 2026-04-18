@@ -2,14 +2,14 @@
 
 root: .
 base: main
-iteration: 36
+iteration: 37
 status: active
 idle_upkeep_streak: 0
-next_iter_unblock_plan: iter37 — G6 [ ]→[~] 플립 (MVP-GATES.md 증거 스택 기록: PR #40 + 기존 인프라, 코드 변경 없음)
+next_iter_unblock_plan: iter38 — G7(consensus convergence) 계획 문서, 또는 G8(audit log integrity) 조사. G4/G5/G6 [x] 번들 follow-up은 별도 큰 iter로 보류.
 backlog: .autopilot/BACKLOG.md (10 candidates; B2 DONE, B1+B3 op-blocked, B4-B10 available)
 open_autopilot_prs: []
 merged_since_last_iter: []
-mvp_gates: 2/8 (G2 [x], G3 [x], G4 [~], G5 [~])
+mvp_gates: 2/8 (G2 [x], G3 [x], G4 [~], G5 [~], G6 [~])
 
 # 영구 OPERATOR 지시 (2026-04-18 chat) — 모든 future iter 준수:
 #   "핵심문서 변경만 관리자 한국어 PR 확인, 나머지는 자동 머지.
@@ -31,8 +31,8 @@ active_task:
   plan:
     - "DONE iter35: G6-PLAN.md 작성 (기존 인프라 상당 부분 발견, xunit 커버리지 부재 확인, 3-iter 로드맵)"
     - "DONE iter36: CarryForwardRendererTests 4 + RollingSummaryWriterTests 4 facts (PR #40, f6f2263)"
-    - "iter37: G6 [ ]→[~] 플립"
-    - "iter38: RotationSmokeRunner end-to-end 스모크 + G6 [~]→[x] 플립"
+    - "DONE iter37: G6 [ ]→[~] 플립 (MVP-GATES.md 증거 스택 + G6-PLAN.md follow-up)"
+    - "iter38+: G6 [~]→[x] — RotationSmokeRunner 기반 e2e (G4/G5와 번들 가능)"
 
 parked_task_g5:
   slug: g5-recovery-resume

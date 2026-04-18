@@ -96,12 +96,34 @@ reversion is a rule break.
   `[~]` 충족.
 
 ## G6 — Rolling summary + carry-forward injection
-- [ ] At session rotation (turn/time/token trigger), broker writes a
+- [~] At session rotation (turn/time/token trigger), broker writes a
       markdown summary and injects Goal/Completed/Pending/Constraints into
       the next session's first turn prompt under a `## Carry-forward`
       section. `summary.generated` event carries bytes + path.
 - Evidence: pre-/post-rotation prompt diff showing carry-forward block +
   matching `summary.generated` log line + file on disk.
+- 2026-04-18 — G6 `[ ]` → `[~]`. Evidence stack:
+  · Pre-reset 인프라 (main branch HEAD 기준 유지 확인):
+    `CarryForwardRenderer.TryBuild` (`## Carry-forward` 마크다운 블록 조립,
+    `prior_handoff_hash` / `goal` / `### Completed|Pending|Constraints`
+    섹션 순서 보장),
+    `RollingSummaryWriter.WriteAsync` (segment markdown 파일을
+    `%LOCALAPPDATA%/CodexClaudeRelayMvp/summaries/{sid}-segment-{N}.md`
+    경로에 atomic write),
+    `RollingSummaryWriter.BuildGeneratedEventPayload` (`summary.generated`
+    이벤트 JSON 페이로드 — path·bytes·segment·turns·cost 포함).
+  · `RelayBroker` 통합: `RotateSessionAsync`가 writer 호출 후
+    `summary.generated` / `summary.failed` 이벤트 emit;
+    `AdvanceAsyncInternal` (line 417-450)가 `TryBuildCarryForwardBlock`
+    결과를 `RelayTurnContext.CarryForward` 필드로 다음 턴에 주입 +
+    `summary.loaded` 이벤트(bytes, fields_populated) 기록.
+  · PR #40 (f6f2263) — `CarryForwardRendererTests` 4 facts +
+    `RollingSummaryWriterTests` 4 facts. 테스트 45/45 통과.
+- Remaining for `[x]`: end-to-end rotation smoke — 세션 rotate 트리거 →
+  실제 디스크 파일 landing 확인 + `summary.generated` 이벤트가 해당
+  payload로 emit 되었음을 로그에서 assert + 다음 턴 prompt에
+  carry-forward block prepend 되었음 확인. `RotationSmokeRunner`를
+  headless 구동시켜 xunit으로 래핑하면 scope ≈100 LOC.
 
 ## G7 — Consensus convergence closeout
 - [ ] When both peers mark `handoff.ready_for_peer_verification: true` AND

@@ -55,6 +55,36 @@ not yet re-evidenced after the DAD-v2 realignment:
    `[ ]` → `[~]` with commit shas; flip `[~]` → `[x]` once e2e smoke
    passes.
 
+## iter execution order — STATUS
+
+- **iter 35 DONE**: G6-PLAN.md 작성.
+- **iter 36 DONE**: `CarryForwardRendererTests` 4 + `RollingSummaryWriterTests` 4
+  (PR #40, f6f2263). 45/45.
+- **iter 37 DONE**: G6 `[ ]` → `[~]` (this iter). 증거 스택 MVP-GATES.md
+  기록.
+
+## Follow-up for G6 `[~]` → `[x]`
+
+End-to-end rotation smoke remains. Harness shape:
+
+1. Build `RelayBroker` with fake `IRelayAdapter` pair whose `RunTurnAsync`
+   returns canned handoffs that carry enough Completed/Pending/Constraints
+   to populate carry-forward state.
+2. In-memory session store + event log writer capturing all emitted
+   events into an inspectable list.
+3. Advance enough turns to trip `MaxTurnsPerSession` threshold (or force
+   via internal test hook if available), causing `RotateSessionAsync`.
+4. Assertions:
+   - summary markdown file landed at expected path,
+   - `summary.generated` event present with matching bytes/path payload,
+   - next `RelayTurnContext.CarryForward` begins with `## Carry-forward`.
+
+Scope ≈120 LOC. Bundle-candidate with G4/G5 `[x]` follow-ups — same
+fake-adapter harness. Defer until G7/G8 sequencing decided or until
+harness is otherwise justified.
+
+## --- historical plan (obsolete, preserved for audit) ---
+
 ## iter execution order (target 3-4 iters)
 
 - **iter 36**: `CarryForwardRendererTests` + `RollingSummaryWriterTests`
