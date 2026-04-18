@@ -48,4 +48,7 @@ public sealed record HandoffEnvelope
 
     [JsonPropertyName("checkpoint_results")]
     public IReadOnlyList<CheckpointResult> CheckpointResults { get; init; } = [];
+
+    [JsonPropertyName("closeout_kind")]
+    public string CloseoutKind { get; init; } = Models.CloseoutKind.PeerHandoff;
 }

@@ -53,6 +53,27 @@ public class TurnPacketAdapterTests
     }
 
     [Fact]
+    public void FromHandoffEnvelope_carries_closeout_kind_recovery_resume()
+    {
+        var env = new HandoffEnvelope
+        {
+            Source = AgentRole.Claude,
+            Target = AgentRole.Codex,
+            SessionId = "2026-04-18-g5",
+            Turn = 4,
+            Ready = false,
+            Prompt = "context overflow",
+            CloseoutKind = Models.CloseoutKind.RecoveryResume,
+        };
+
+        var packet = TurnPacketAdapter.FromHandoffEnvelope(env);
+
+        Assert.Equal(Models.CloseoutKind.RecoveryResume, packet.Handoff.CloseoutKind);
+        Assert.Equal(AgentRole.Claude, packet.From);
+        Assert.Equal(4, packet.Turn);
+    }
+
+    [Fact]
     public void FromHandoffEnvelope_enables_verifier_block_detection()
     {
         var env = new HandoffEnvelope

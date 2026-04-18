@@ -15,7 +15,9 @@ public static class TurnPacketAdapter
             SessionId = env.SessionId,
             Handoff = new TurnHandoff
             {
-                CloseoutKind = CloseoutKind.PeerHandoff,
+                CloseoutKind = string.IsNullOrWhiteSpace(env.CloseoutKind)
+                    ? CloseoutKind.PeerHandoff
+                    : env.CloseoutKind,
                 NextTask = env.Prompt,
                 Context = env.Reason,
                 ReadyForPeerVerification = env.Ready,
