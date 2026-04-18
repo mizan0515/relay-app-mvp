@@ -54,11 +54,24 @@ reversion is a rule break.
   tests 3 facts 추가, 전체 21/21 통과.
 
 ## G4 — One full peer round-trip automated
-- [ ] Starting from a committed turn-1 (from Codex), the broker routes the
+- [~] Starting from a committed turn-1 (from Codex), the broker routes the
       handoff to Claude Code (or back to Codex), produces a turn-2 packet,
       and writes state.json `current_turn = 2`. No manual copy-paste.
 - Evidence: session directory with turn-1/2 packets + handoffs + state.json
   showing progression, all created within one broker-driven session.
+- 2026-04-18 — G4 `[ ]` → `[~]`. Evidence stack:
+  · PR #35 (b64c2e9) — `TurnPacketYamlPersister` pure fn + 6 facts.
+  · PR #36 (b59c959) — broker hook: `WriteHandoffArtifactAsync` emits
+    `turn-{N}.yaml` + `state.json` on every accepted handoff + 3 facts.
+  · PR #37 (43fedba) — `RoundTripArtifactSmokeTests` 3 facts: Codex→Claude
+    turn-1 + Claude→Codex turn-2 sequence produces session dir with both
+    handoff.md, both yaml, state.json showing `current_turn=3`. Reversed
+    starter (Claude first) yields identical shape (peer-symmetric).
+  · Test suite: 33/33 통과 on main.
+- Remaining for `[x]`: broker-driven smoke with fake `IRelayAdapter`s that
+  return canned `dad_handoff` JSON, proving the routing flow (not only the
+  artifact emit) ends with `current_turn=2` and alternating `ActiveAgent`.
+  Deferred to follow-up iter; artifact-layer evidence is sufficient for `[~]`.
 
 ## G5 — recovery_resume protocol
 - [ ] When a turn ends with `closeout_kind: recovery_resume` (context

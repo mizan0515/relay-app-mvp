@@ -35,15 +35,35 @@ Gate definition (from MVP-GATES.md):
    - asserts session directory contains turn-1, turn-2 packets + handoffs,
      state.json shows current_turn=2 and alternating ActiveAgent.
 
-## iter 27+ execution order
+## iter 27+ execution order — STATUS
 
-- **iter 27**: add turn-packet YAML persister (pure fn like HandoffArtifactPersister).
-- **iter 28**: wire packet persister into broker AdvanceAsync (after handoff
-  accepted). Verify state.json path.
-- **iter 29**: author integration smoke test driving the round-trip with
-  fake adapters. Assert evidence artifacts exist.
-- **iter 30**: flip G4 `[ ]`→`[~]`→`[x]` with evidence pointing at the
-  generated session directory.
+- **iter 27 DONE**: `TurnPacketYamlPersister` pure fn + 6 facts (PR #35 b64c2e9).
+- **iter 28 DONE**: broker hook + `SessionStatePersister` + 3 facts (PR #36 b59c959).
+- **iter 29 DONE**: `RoundTripArtifactSmokeTests` 3 facts, artifact-layer
+  round-trip + peer-symmetric check (PR #37 43fedba).
+- **iter 30 DONE**: G4 `[ ]` → `[~]` (this iter). Artifact-layer evidence
+  stack documented in MVP-GATES.md.
+
+## Follow-up for G4 `[~]` → `[x]`
+
+The artifact layer is proven. The remaining gap is that those artifacts
+are currently emitted by direct persister calls in tests, not by driving
+`RelayBroker` end-to-end. The full `[x]` needs:
+
+1. **Fake `IRelayAdapter` pair** — codex-fake + claude-fake, each returns
+   a canned `RelayAdapterResult` whose `Output` contains a valid
+   `dad_handoff` JSON envelope parseable by `HandoffParser.TryParse`.
+2. **In-memory `IRelaySessionStore` + `IEventLogWriter`** — state kept in
+   dicts / files under a temp dir.
+3. **Test harness** — construct `RelayBroker` with the fakes,
+   `StartSessionAsync(codex, "prompt")`, `AdvanceAsync` x2, assert session
+   dir contains turn-1/2 handoff.md + yaml + state.json with
+   `current_turn=2` and alternating `ActiveAgent`.
+4. **Peer-symmetric fact** — repeat with Claude as first role.
+
+Scope ≈150 LOC (one test file + fakes). Best done as single PR with
+careful budget. Schedule: next non-autopilot iter after G5/G6 sequencing
+is decided, OR immediately if backlog stays empty.
 
 ## Peer-symmetry check
 
