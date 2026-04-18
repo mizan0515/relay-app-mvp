@@ -2,10 +2,10 @@
 
 root: .
 base: main
-iteration: 97
-status: post-mvp-idle  # iter97: MVP 완주 후 idle-upkeep, 운영자 지시 대기
-idle_upkeep_streak: 2
-next_iter_unblock_plan: iter98 — post-MVP 백로그(B16/B17/B18) 운영자 승인 대기 지속
+iteration: 98
+status: post-mvp-idle  # iter98: MVP 완주 후 idle-upkeep, 운영자 지시 대기
+idle_upkeep_streak: 3
+next_iter_unblock_plan: iter99 — post-MVP 백로그(B16/B17/B18) 운영자 승인 대기 지속
 backlog: .autopilot/BACKLOG.md (B1·B2·B3·B4·B5·B6·B7·B9·B12·B13·B13.1·B14·B15 DONE · B11 CLOSED · B10 SPEC-LANDED · active=B8 blocked · post-MVP B16/B17/B18)
 open_autopilot_prs: []  # iter95: PR #58 머지 완료
 merged_since_last_iter: [58]  # iter95: 🎉 G1 flip PR 관리자 머지 → MVP 8/8
