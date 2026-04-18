@@ -2,10 +2,10 @@
 
 root: .
 base: main
-iteration: 35
+iteration: 36
 status: active
 idle_upkeep_streak: 0
-next_iter_unblock_plan: iter36 — G6 step 1/3 (CarryForwardRendererTests + RollingSummaryWriterTests, 순수 facts ≤80 LOC)
+next_iter_unblock_plan: iter37 — G6 [ ]→[~] 플립 (MVP-GATES.md 증거 스택 기록: PR #40 + 기존 인프라, 코드 변경 없음)
 backlog: .autopilot/BACKLOG.md (10 candidates; B2 DONE, B1+B3 op-blocked, B4-B10 available)
 open_autopilot_prs: []
 merged_since_last_iter: []
@@ -30,7 +30,7 @@ active_task:
   plan_doc: .autopilot/G6-PLAN.md
   plan:
     - "DONE iter35: G6-PLAN.md 작성 (기존 인프라 상당 부분 발견, xunit 커버리지 부재 확인, 3-iter 로드맵)"
-    - "iter36: CarryForwardRendererTests + RollingSummaryWriterTests (순수)"
+    - "DONE iter36: CarryForwardRendererTests 4 + RollingSummaryWriterTests 4 facts (PR #40, f6f2263)"
     - "iter37: G6 [ ]→[~] 플립"
     - "iter38: RotationSmokeRunner end-to-end 스모크 + G6 [~]→[x] 플립"
 
