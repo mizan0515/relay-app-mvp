@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace CodexClaudeRelay.Core.Models;
 
 public sealed record RelayLogEvent(
@@ -5,4 +7,5 @@ public sealed record RelayLogEvent(
     string EventType,
     string? Role,
     string Message,
-    string? Payload = null);
+    string? Payload = null,
+    [property: JsonPropertyName("event_hash")] string? EventHash = null);

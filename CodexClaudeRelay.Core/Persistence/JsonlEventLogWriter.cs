@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using CodexClaudeRelay.Core.Models;
+using CodexClaudeRelay.Core.Protocol;
 
 namespace CodexClaudeRelay.Core.Persistence;
 
@@ -23,7 +24,10 @@ public sealed class JsonlEventLogWriter : IEventLogWriter
     public async Task AppendAsync(string sessionId, RelayLogEvent logEvent, CancellationToken cancellationToken)
     {
         var path = GetLogPath(sessionId);
-        var line = JsonSerializer.Serialize(logEvent, SerializerOptions);
+        var stamped = logEvent.EventHash is null
+            ? logEvent with { EventHash = ComputeEventHash(sessionId, logEvent) }
+            : logEvent;
+        var line = JsonSerializer.Serialize(stamped, SerializerOptions);
 
         await _lock.WaitAsync(cancellationToken);
         try
@@ -37,4 +41,16 @@ public sealed class JsonlEventLogWriter : IEventLogWriter
     }
 
     public string GetLogPath(string sessionId) => Path.Combine(_logDirectory, $"{sessionId}.jsonl");
+
+    public static string ComputeEventHash(string sessionId, RelayLogEvent e)
+    {
+        var canonical =
+            $"session={sessionId}\n" +
+            $"ts={e.Timestamp.ToUniversalTime():O}\n" +
+            $"type={e.EventType}\n" +
+            $"role={e.Role ?? string.Empty}\n" +
+            $"msg={e.Message}\n" +
+            $"payload={e.Payload ?? string.Empty}";
+        return CanonicalHash.OfString(canonical);
+    }
 }
