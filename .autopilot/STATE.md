@@ -2,14 +2,14 @@
 
 root: .
 base: main
-iteration: 46
+iteration: 47
 status: active
 idle_upkeep_streak: 0
-next_iter_unblock_plan: iter47 — G-BUNDLE 완료 (G4·G5·G6 [x]). 남은 게이트 G1 (op-blocked) / G8 (audit log integrity, fresh capability). G8 스캐폴딩 또는 BACKLOG B4-B10 중 선택.
-backlog: .autopilot/BACKLOG.md (10 candidates; B2 DONE, B1+B3 op-blocked, B4-B10 available)
+next_iter_unblock_plan: iter48 — G8 step 2/3. RelayLogEvent.event_hash 필드 추가 + JsonlEventLogWriter 에서 CanonicalHash 로 stamp. protected_paths 미접촉. 목표 LOC ≤120.
+backlog: .autopilot/BACKLOG.md (10 candidates; B2 DONE, B1+B3 op-blocked, B4 IN-PROGRESS, B5-B10 available)
 open_autopilot_prs: []
-merged_since_last_iter: [47]
-mvp_gates: 6/8 (G2 [x], G3 [x], G4 [x], G5 [x], G6 [x], G7 [x])
+merged_since_last_iter: [48]
+mvp_gates: 6/8 (G2 [x], G3 [x], G4 [x], G5 [x], G6 [x], G7 [x]) + G8 foundation 확보
 
 # 영구 OPERATOR 지시 (2026-04-18 chat) — 모든 future iter 준수:
 #   "핵심문서 변경만 관리자 한국어 PR 확인, 나머지는 자동 머지.
@@ -22,17 +22,22 @@ operator_directives_sticky:
   - "매 iter 행적은 HISTORY.md + 대시보드.md + METRICS.jsonl에 남긴다"
 
 active_task:
-  slug: g-bundle-follow-up
+  slug: g8-audit-log-integrity
   pr: null
   branch: null
-  gate: G4/G5/G6
-  started_iter: 43
-  plan_doc: .autopilot/G-BUNDLE-PLAN.md
+  gate: G8
+  started_iter: 47
   plan:
-    - "DONE iter43: G-BUNDLE-PLAN.md 작성 (3-iter 로드맵 · 코드 변경 없음)"
-    - "DONE iter44: G4 [~]→[x] 브로커 routing e2e (PR #45, 74686ef · 61/61)"
-    - "DONE iter45: G5 [~]→[x] recovery_resume e2e (PR #46, 162c0ec · 63/63)"
-    - "DONE iter46: G6 [~]→[x] rotation smoke (PR #47, a3ba00a · 64/64)"
+    - "DONE iter47: CanonicalHash foundation (PR #48, b5f2dfd · 73/73)"
+    - "iter48: RelayLogEvent.event_hash 필드 + JsonlEventLogWriter stamp 배선 (≤120 LOC)"
+    - "iter49: replay-dedup xunit e2e — 동일 패킷 2회 제출 → state transition 1회 증명 → G8 [ ]→[x]"
+
+last_completed_task_g-bundle:
+  slug: g-bundle-follow-up
+  completed_iter: 46
+  prs: [45, 46, 47]
+  final_commit: 1761bc6
+  plan_doc: .autopilot/G-BUNDLE-PLAN.md
 
 last_completed_task_g7:
   slug: g7-consensus-convergence
