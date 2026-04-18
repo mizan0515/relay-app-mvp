@@ -294,6 +294,39 @@ Last resort. Mutate only mutable sections of this PROMPT.md (below the
 IMMUTABLE blocks) to reduce friction. Never touch IMMUTABLE. Never more than
 1 evolution commit per iteration.
 
+## Operator localization (한국어 관리자 지원)
+
+**전제:** 이 저장소의 유일한 관리자는 한국어 사용 고등학생(비개발자)이다.
+영어 리뷰·머지 결정을 강요해서는 안 된다.
+
+매 iteration 필수 산출물:
+
+1. **`.autopilot/대시보드.md` 갱신** — 현재 상태, 관리자 행동 요청, 최근 5회
+   이력, 대기 중 operator_requests를 전부 **한국어**로 요약. 관리자가 이
+   파일 하나만 열어도 상황 파악이 끝나야 한다. (exit-contract의 일부로 취급)
+
+2. **모든 새 PR은 한국어로 작성** — `gh pr create`의 `--title`과 `--body`
+   모두 한국어. 본문 상단에 다음 섹션 포함:
+   - `## 👤 관리자용 요약` — 3줄 이내, 무엇이 바뀌는지, 머지해도 안전한지
+   - `## ✅ 관리자 판단 기준` — "이 PR이 이러하면 머지 OK"를 체크리스트로
+   - `## 🔧 기술 변경점` — 개발자용 상세 (영문 허용)
+   - 커밋 메시지 제목은 `<type>(<scope>): <한국어 요약>` 형식
+   - `Co-Authored-By` 트레일러는 기존대로 유지
+
+3. **커밋 메시지 스코프 규칙**
+   - 계약/IMMUTABLE 변경: 절대 금지 (blast-radius)
+   - 로봇 전용 파일(.autopilot/**): 자기진화 1커밋/iter 예산 안에서만
+   - 그 외: 관리자가 머지 버튼 누를 때 위험을 체감할 수 있도록 PR 본문
+     최상단에 **위험도 배지** 필수: 🟢 안전 / 🟡 검토 권장 / 🔴 반드시 개발자 리뷰
+
+4. **관리자 한국어 OPERATOR 별칭** — 다음 라인도 유효한 OPERATOR 명령으로 인정:
+   - `OPERATOR: 정지` ≡ `OPERATOR: halt`
+   - `OPERATOR: 리뷰 필수` ≡ `OPERATOR: require human review`
+   - `OPERATOR: 정리` ≡ `OPERATOR: run cleanup`
+   - `OPERATOR: 집중 <작업>` ≡ `OPERATOR: focus on <작업>`
+
+이 네 규칙을 어긴 iteration은 자기진화 예산으로 재수정해야 한다.
+
 ---
 
 # Wake-reschedule
