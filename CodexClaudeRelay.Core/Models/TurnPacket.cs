@@ -17,6 +17,28 @@ public sealed record TurnPacket
     public int Turn { get; init; }
     public string SessionId { get; init; } = string.Empty;
     public TurnHandoff Handoff { get; init; } = new();
+    public PeerReview PeerReview { get; init; } = new();
+}
+
+public sealed record PeerReview
+{
+    public IReadOnlyList<CheckpointResult> CheckpointResults { get; init; } = Array.Empty<CheckpointResult>();
+}
+
+public sealed record CheckpointResult
+{
+    public string CheckpointId { get; init; } = string.Empty;
+    /// <summary>PASS | FAIL | BLOCKED | SKIPPED</summary>
+    public string Status { get; init; } = string.Empty;
+    public string EvidenceRef { get; init; } = string.Empty;
+}
+
+public static class CheckpointStatus
+{
+    public const string Pass = "PASS";
+    public const string Fail = "FAIL";
+    public const string Blocked = "BLOCKED";
+    public const string Skipped = "SKIPPED";
 }
 
 public sealed record TurnHandoff
