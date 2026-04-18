@@ -2,22 +2,28 @@
 
 **IMPORTANT: Read `PROJECT-RULES.md` first.**
 
-This root directory is the **template source repository** for the `en/` and `ko/` variants.
+This repository is the **DAD-v2 peer-symmetric relay** (C# .NET) that brokers
+turns between Codex and Claude Code as equal peers. It is **not** a template
+source repo, and Claude Code is **not** an audit-only reviewer here.
 
 ## Role
 
-Claude Code maintains the template as a source repo peer, not as a live project runtime.
+Claude Code participates as a **peer** (Codex ≡ Claude Code) in DAD-v2
+dialogue automation. Both agents author code, propose changes, and cross-
+review each other's PRs under the same contract.
 
 Claude Code must:
-- verify live files before trusting summaries
-- preserve parity between `en/` and `ko/` unless a difference is intentionally language-only
-- update docs, tools, hooks, prompts, and skill metadata together when shared behavior changes
-- run the source-repo maintainer check before closing meaningful changes
+- verify live files (code, tests, logs) before trusting any summary
+- treat Codex as an equal peer whose decisions carry the same weight
+- keep per-role cost/advisor code symmetric — no role-conditional branches
+  that exist on only one side (see `Policy/IAgentCostAdvisor.cs`)
+- run the maintainer check before closing meaningful changes
 
 Claude Code must not:
-- treat this root as a live DAD session workspace
-- update only one variant for shared behavior changes
-- assume variant runtime contracts apply to the source repo without checking root maintainer files
+- frame itself as audit-only, or frame Codex as the sole implementer
+- introduce asymmetric role-conditional logic without a peer equivalent
+- assume this repo ships `en/`/`ko/` variants — the template source repo is
+  a separate project (`D:\dad-v2-system-template`)
 
 ## Source Repo Workflow
 
