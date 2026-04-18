@@ -30,19 +30,24 @@ reversion is a rule break.
   `tools/Validate-DadPacket.ps1` and have symmetric structure.
 
 ## G2 — Handoff artifact generation
-- [ ] When a turn closes with `handoff.closeout_kind: peer_handoff`, the
+- [x] When a turn closes with `handoff.closeout_kind: peer_handoff`, the
       broker saves `turn-{N}-handoff.md` at the path named in
       `handoff.prompt_artifact`, containing the 7-part DAD prompt
       (references, state, prev packet, next_task, summary, tail, paste).
 - Evidence: a generated handoff.md file + matching `handoff_written` log line.
 
 ## G3 — Checkpoint PASS/FAIL collection
-- [ ] The broker parses `peer_review.checkpoint_results` from a turn packet
+- [~] The broker parses `peer_review.checkpoint_results` from a turn packet
       and emits a `checkpoint.verified` event per result with fields
       `{checkpoint_id, status, evidence_ref}`. Missing evidence for a
       non-PASS result blocks the turn from closing.
 - Evidence: logs/*.jsonl showing `checkpoint.verified` events for a real
   turn, plus a rejection log line when evidence is missing.
+- 2026-04-18 — G3 `[ ]` → `[~]`. Evidence: PR #33 (commit 7f0ce82).
+  `CheckpointVerifier.Verify` emits `checkpoint.verified` per result +
+  `checkpoint.evidence_missing` when non-PASS lacks `evidence_ref`. xunit
+  6/6 통과. Remaining for `[x]`: enforce actual block-turn-close semantic
+  in broker handoff flow (currently event-only).
 
 ## G4 — One full peer round-trip automated
 - [ ] Starting from a committed turn-1 (from Codex), the broker routes the
@@ -93,3 +98,13 @@ pointer. Never delete history lines — they are the regression audit trail.)
 - 2026-04-18 — scaffolded post-reset; all gates `[ ]`. Previous scorecard
   (Codex-only G1-G8 from pre-reset state) archived in
   `archive/codex-broker-phase-f` tag.
+- 2026-04-18 — G2 `[ ]` → `[~]`. Evidence: PR #28
+  (commits 18a2b01 + 7de9709). HandoffArtifactWriter renders the 7-part
+  DAD prompt; 9 xunit specs pass; peer-symmetric codex↔claude.
+- 2026-04-18 — G2 `[~]` → `[x]`. Evidence: PR #31 (commits 374507a +
+  d2fa1c7 + 6970c43, merged 13:05:28Z). `RelayBroker.CompleteHandoffAsync`
+  now invokes `HandoffArtifactPersister.WriteAsync` through
+  `TurnPacketAdapter`, emitting `handoff_written` log event on success and
+  `handoff_write_failed` on exception. Artifact lands at
+  `Document/dialogue/sessions/{sid}/turn-{N}-handoff.md`.
+  Core tests: 3 new + 9 existing = 12/12 green (565 ms).

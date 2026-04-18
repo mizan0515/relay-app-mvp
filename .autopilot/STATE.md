@@ -2,27 +2,41 @@
 
 root: .
 base: main
-iteration: 0
-status: reset-in-progress
-active_task:
-  slug: dad-v2-reset-rebuild
-  plan:
-    - "Phase 0: DAD-v2 contract files ported (DONE)"
-    - "Phase 1: IMMUTABLE:mission block + hook rewrite + new MVP-GATES (DONE)"
-    - "Phase 2: delete poison docs + CodexProtocol projects + RelaySide/CodexPricing (DONE)"
-    - "Phase 3: Desktop/ retained for future dual-agent UI (DONE)"
-    - "Phase 4: ADAPT — see .autopilot/PHASE4-PLAN.md (PENDING, build currently broken on reset branch)"
-    - "Phase 5: commit --no-verify → push → PR → land → remove HALT → loop iter 1 → G1"
-  started_iter: 0
-  branch: reset/dad-v2-aligned
-  gate: N/A (pre-gate reset — HALT active)
+iteration: 24
+status: active
+idle_upkeep_streak: 0
+next_iter_unblock_plan: iter25 — G3 [x] 완성(브로커 handoff flow에서 BlocksTurnClose 실제 enforcement) 또는 G4 round-trip 착수
+backlog: .autopilot/BACKLOG.md (10 candidates; B2 DONE, B1+B3 op-blocked, B4-B10 available)
+open_autopilot_prs: []
+merged_since_last_iter:
+  - "33 (G3 2/3: 브로커 hook + CheckpointVerifier xunit 6/6 + 자동 머지)"
+mvp_gates: 1/8 (G2 [x], G3 [~])
 
-# active_task schema:
-#   slug: <kebab-case>
-#   plan: [bullet, bullet]
-#   started_iter: N
-#   branch: autopilot/<slug>-<YYYYMMDD>
-#   gate: G<n>  (reference to .autopilot/MVP-GATES.md)
+# 영구 OPERATOR 지시 (2026-04-18 chat) — 모든 future iter 준수:
+#   "핵심문서 변경만 관리자 한국어 PR 확인, 나머지는 자동 머지.
+#    기록은 남기고, PR도 고등학생 비개발자 관리자 입장에서 작성."
+# PROMPT.md Operator-localization 규칙 5·6이 이를 강제 (main 착륙 완료).
+operator_directives_sticky:
+  - "비핵심(protected_paths 미접촉) PR은 빌드 그린 + 🟢 배지 조건 만족 시 로봇 자동 머지"
+  - "핵심 문서(protected_paths) PR은 관리자 한국어 리뷰 필수"
+  - "모든 PR 본문은 비개발자 고등학생 관리자 가독성 우선 (한국어 병기, 기술용어 최소화)"
+  - "매 iter 행적은 HISTORY.md + 대시보드.md + METRICS.jsonl에 남긴다"
+
+active_task:
+  slug: g3-checkpoint-verified
+  pr: null (iter24에서 오픈)
+  branch: autopilot/g3-checkpoint-verified-20260418 (생성 + 푸시 완료)
+  gate: G3
+  started_iter: 22
+  plan:
+    - "DONE iter22: STATE 전환"
+    - "DONE iter23: 브랜치 생성 + TurnPacket.PeerReview 스키마 추가 + CheckpointVerifier 순수 함수 (빌드 0/0, 커밋 9e44afa)"
+    - "DONE iter24: 브로커 hook (EmitCheckpointVerifiedAsync) + xunit 6/6 facts + PR #33 자동 머지 (7f0ce82). G3 [ ]→[~]"
+    - "iter25+: G3 [x] — BlocksTurnClose 실제 enforcement (handoff flow에서 거부 경로)"
+parked_task:
+  slug: g1-peer-symmetric-packet-io
+  reason: blocked on validator + cost-strip operator decisions
+  branch: autopilot/g1-peer-symmetric-packet-io-20260418 (not yet created)
 
 plan_docs:
   - DEV-PROGRESS.md
@@ -47,7 +61,6 @@ protected_paths:
   - .autopilot/project.ps1
   - .autopilot/project.sh
   - .githooks/
-  # DAD-v2 contract files — peer protocol definition, drift-locked.
   - PROJECT-RULES.md
   - CLAUDE.md
   - AGENTS.md
@@ -61,15 +74,9 @@ open_questions:
   - "Does the approval-UI surface need dual-agent view redesign, or can the existing single-pane approach serve both peers with role labels?"
   - "Is there a production DAD-v2 session artifact to replay against, or must we synthesize fixtures for the first gate?"
 
-# MVP gates: canonical checklist at .autopilot/MVP-GATES.md. STATE tracks only tally.
-mvp_gates: 0/8
-mvp_last_advanced_iter: 0
+operator_requests:
+  - "G1 validator 포팅 (tools/Validate-Dad*.ps1) — 세 옵션 중 하나 지시 필요."
+  - "Codex/Claude 비대칭 비용 경로 — strip / generalize / defer 중 하나."
+  - "옛 Validate-TemplateVariants 스크래핑 + CLAUDE.md 서두 정정 승인."
 
-# OPERATOR overrides — any line starting with `OPERATOR:` wins over mutable rules
-# but NEVER over IMMUTABLE:mission.
-#   OPERATOR: halt
-#   OPERATOR: focus on <task>
-#   OPERATOR: run cleanup
-#   OPERATOR: mvp-rescope <rationale>
-#   OPERATOR: post-mvp <direction>
-#   OPERATOR: require human review
+mvp_last_advanced_iter: 20
