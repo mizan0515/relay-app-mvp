@@ -628,6 +628,8 @@ public sealed class RelayBroker
         bool repaired,
         CancellationToken cancellationToken)
     {
+        var priorHandoff = State.LastHandoff;
+
         if (handoff.SessionId != State.SessionId)
         {
             return await PauseWithResultAsync(
@@ -743,13 +745,75 @@ public sealed class RelayBroker
                 cancellationToken);
         }
 
+        ConvergenceDecision? convergence = null;
+        if (!isRecoveryResume && priorHandoff is not null)
+        {
+            var prevPacket = TurnPacketAdapter.FromHandoffEnvelope(priorHandoff);
+            var currPacket = TurnPacketAdapter.FromHandoffEnvelope(handoff);
+            var decision = ConvergenceDetector.Evaluate(prevPacket, currPacket);
+            if (decision.IsConverged)
+            {
+                State.Status = RelaySessionStatus.Converged;
+                convergence = decision;
+                await _eventLogWriter.AppendAsync(
+                    State.SessionId,
+                    new RelayLogEvent(
+                        DateTimeOffset.Now,
+                        "session.converged",
+                        handoff.Source,
+                        $"Session converged at turn {handoff.Turn}. Matching checkpoints: {string.Join(",", decision.MatchingCheckpoints)}",
+                        handoff.Reason),
+                    cancellationToken);
+            }
+        }
+
         await PersistAndLogAsync(
             new RelayLogEvent(DateTimeOffset.Now, "handoff.accepted", handoff.Source, $"Accepted handoff to {handoff.Target}.", handoff.Prompt),
             cancellationToken);
 
         await WriteHandoffArtifactAsync(handoff, cancellationToken);
 
+        if (convergence is not null)
+        {
+            await WriteBacklogClosureAsync(handoff, cancellationToken);
+        }
+
         return new BrokerAdvanceResult(true, false, repaired, "Handoff accepted and queued for the opposite role.", State);
+    }
+
+    private async Task WriteBacklogClosureAsync(HandoffEnvelope handoff, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var backlogPath = Path.Combine("Document", "dialogue", "backlog.json");
+            var existing = await BacklogClosureWriter.LoadAsync(backlogPath, cancellationToken);
+            var updated = BacklogClosureWriter.UpsertClosure(
+                existing,
+                sessionId: State.SessionId,
+                closedBySessionId: State.SessionId,
+                closedAt: DateTimeOffset.Now,
+                convergedTurn: handoff.Turn);
+            var bytes = await BacklogClosureWriter.WriteAsync(updated, backlogPath, cancellationToken);
+            await _eventLogWriter.AppendAsync(
+                State.SessionId,
+                new RelayLogEvent(
+                    DateTimeOffset.Now,
+                    "backlog.closure_written",
+                    handoff.Source,
+                    $"Backlog closure written to {backlogPath} ({bytes} bytes, session_status=converged, converged_turn={handoff.Turn})."),
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            await _eventLogWriter.AppendAsync(
+                State.SessionId,
+                new RelayLogEvent(
+                    DateTimeOffset.Now,
+                    "backlog.closure_failed",
+                    handoff.Source,
+                    $"Backlog closure failed: {ex.GetType().Name}: {ex.Message}"),
+                cancellationToken);
+        }
     }
 
     private async Task WriteHandoffArtifactAsync(HandoffEnvelope handoff, CancellationToken cancellationToken)
