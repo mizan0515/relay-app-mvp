@@ -8,4 +8,5 @@ public enum RelaySessionStatus
     Paused,
     Stopped,
     Failed,
+    Converged,
 }
