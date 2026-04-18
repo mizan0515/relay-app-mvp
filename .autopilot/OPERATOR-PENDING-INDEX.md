@@ -8,13 +8,10 @@
 
 ---
 
-## 🔴 1. PR #51 리뷰 대기 (MVP-GATES.md Flip digest)
+## ✅ 1. PR #51 머지 완료 (MVP-GATES.md Flip digest) — 감사합니다!
 
-- **무엇**: `.autopilot/MVP-GATES.md` 상단에 8-게이트 한 줄 요약 표 추가(+19줄).
-- **왜 필요**: 리뷰어가 스크롤 없이 진행률을 한눈에 파악.
-- **현재**: PR #51 OPEN, reviewDecision="", comments=[] (iter54 생성 · iter59 까지 5회 폴링).
-- **관리자님 답변 형식**: PR #51 에서 `Approve` 클릭 또는 `Request changes`.
-- **링크**: https://github.com/mizan0515/codex-claude-relay/pull/51
+- **결과**: iter60(2026-04-19 02:30경) MERGED 확인. commit `f21b617` (main).
+- **B15 DONE**. 남은 대기 항목은 아래 2·3·4.
 
 ---
 
