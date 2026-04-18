@@ -712,6 +712,7 @@ public sealed class RelayBroker
         try
         {
             var packet = TurnPacketAdapter.FromHandoffEnvelope(handoff);
+            await EmitCheckpointVerifiedAsync(packet, handoff.Source, cancellationToken);
             var path = Path.Combine(
                 "Document", "dialogue", "sessions", handoff.SessionId,
                 $"turn-{handoff.Turn}-handoff.md");
@@ -734,6 +735,34 @@ public sealed class RelayBroker
                     "handoff_write_failed",
                     handoff.Source,
                     $"Handoff artifact write failed: {ex.GetType().Name}: {ex.Message}"),
+                cancellationToken);
+        }
+    }
+
+    private async Task EmitCheckpointVerifiedAsync(TurnPacket packet, string source, CancellationToken cancellationToken)
+    {
+        if (packet.PeerReview.CheckpointResults.Count == 0) return;
+        var report = CheckpointVerifier.Verify(packet);
+        foreach (var rec in report.Records)
+        {
+            await _eventLogWriter.AppendAsync(
+                State.SessionId,
+                new RelayLogEvent(
+                    DateTimeOffset.Now,
+                    "checkpoint.verified",
+                    source,
+                    $"checkpoint_id={rec.CheckpointId} status={rec.Status} evidence_ref={(string.IsNullOrEmpty(rec.EvidenceRef) ? "-" : rec.EvidenceRef)}{(rec.EvidenceMissing ? " evidence_missing=true" : "")}"),
+                cancellationToken);
+        }
+        if (report.BlocksTurnClose)
+        {
+            await _eventLogWriter.AppendAsync(
+                State.SessionId,
+                new RelayLogEvent(
+                    DateTimeOffset.Now,
+                    "checkpoint.evidence_missing",
+                    source,
+                    $"Missing evidence for non-PASS checkpoints: {string.Join(", ", report.MissingEvidenceFor)}"),
                 cancellationToken);
         }
     }
