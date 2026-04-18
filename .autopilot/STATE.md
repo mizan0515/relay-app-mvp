@@ -2,10 +2,10 @@
 
 root: .
 base: main
-iteration: 30
+iteration: 31
 status: active
 idle_upkeep_streak: 0
-next_iter_unblock_plan: iter31 — G4 [x] follow-up (broker-driven fake-adapter smoke ~150 LOC) 또는 G5 recovery_resume 착수
+next_iter_unblock_plan: iter32 — G5 step 1/3 (HandoffEnvelope.closeout_kind 필드 추가 + TurnPacketAdapter 매핑 + xunit 1 fact, ≤40 LOC)
 backlog: .autopilot/BACKLOG.md (10 candidates; B2 DONE, B1+B3 op-blocked, B4-B10 available)
 open_autopilot_prs: []
 merged_since_last_iter: []
@@ -22,21 +22,22 @@ operator_directives_sticky:
   - "매 iter 행적은 HISTORY.md + 대시보드.md + METRICS.jsonl에 남긴다"
 
 active_task:
-  slug: g4-round-trip-automated
+  slug: g5-recovery-resume
   pr: null
-  branch: null (iter27에 생성)
-  gate: G4
-  started_iter: 26
-  plan_doc: .autopilot/G4-PLAN.md
+  branch: null (iter32에 생성)
+  gate: G5
+  started_iter: 31
+  plan_doc: .autopilot/G5-PLAN.md
   plan:
-    - "DONE iter26: G4-PLAN.md 작성 (현재 가진 것 vs 부족한 것 정리, 4-iter 실행 순서)"
-    - "DONE iter27: TurnPacketYamlPersister 순수 함수 + xunit 6 (PR #35, b64c2e9)"
-    - "DONE iter28: 브로커 hook (turn-{N}.yaml + state.json) + SessionStatePersister + xunit 3 (PR #36, b59c959)"
-    - "DONE iter29: RoundTripArtifactSmokeTests 3 facts (peer-symmetric 검증 포함) (PR #37, 43fedba)"
-    - "DONE iter30: G4 [ ]→[~] 플립 (MVP-GATES 증거 스택 기록) + G4-PLAN.md 후속 계획"
-    - "iter31+: G4 [~]→[x] — broker-driven fake-adapter smoke (선택적 follow-up)"
-    - "iter29: 통합 스모크 테스트 (fake adapter 2개로 라운드트립)"
-    - "iter30: G4 [ ]→[~]→[x] 플립"
+    - "DONE iter31: G5-PLAN.md 작성 (기존 인프라 파악, 3-iter 실행 순서)"
+    - "iter32: HandoffEnvelope.closeout_kind + TurnPacketAdapter 매핑 + xunit 1 fact"
+    - "iter33: 브로커 recovery_resume 분기 + 프롬프트 04 주입 + xunit 2-3 facts"
+    - "iter34: end-to-end 스모크 (fake adapter) + G5 [ ]→[~]→[x] 플립"
+
+parked_task_g4:
+  slug: g4-round-trip-automated
+  gate: G4
+  status: "[~] partial — artifact-layer proven, broker-driven smoke deferred (see G4-PLAN.md §Follow-up)"
 
 last_completed_task:
   slug: g3-checkpoint-verified
