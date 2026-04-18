@@ -2,10 +2,10 @@
 
 root: .
 base: main
-iteration: 31
+iteration: 32
 status: active
 idle_upkeep_streak: 0
-next_iter_unblock_plan: iter32 — G5 step 1/3 (HandoffEnvelope.closeout_kind 필드 추가 + TurnPacketAdapter 매핑 + xunit 1 fact, ≤40 LOC)
+next_iter_unblock_plan: iter33 — G5 step 2/3 (브로커 CompleteHandoffAsync recovery_resume 분기 + 프롬프트 04 주입 + xunit 2-3 facts, ≤80 LOC)
 backlog: .autopilot/BACKLOG.md (10 candidates; B2 DONE, B1+B3 op-blocked, B4-B10 available)
 open_autopilot_prs: []
 merged_since_last_iter: []
@@ -30,7 +30,7 @@ active_task:
   plan_doc: .autopilot/G5-PLAN.md
   plan:
     - "DONE iter31: G5-PLAN.md 작성 (기존 인프라 파악, 3-iter 실행 순서)"
-    - "iter32: HandoffEnvelope.closeout_kind + TurnPacketAdapter 매핑 + xunit 1 fact"
+    - "DONE iter32: HandoffEnvelope.closeout_kind + TurnPacketAdapter 매핑 + xunit 1 fact (PR #38, 9e087fa)"
     - "iter33: 브로커 recovery_resume 분기 + 프롬프트 04 주입 + xunit 2-3 facts"
     - "iter34: end-to-end 스모크 (fake adapter) + G5 [ ]→[~]→[x] 플립"
 
