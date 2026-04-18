@@ -2,7 +2,6 @@ using CodexClaudeRelay.Core.Adapters;
 using CodexClaudeRelay.Core.Models;
 using CodexClaudeRelay.Core.Persistence;
 using CodexClaudeRelay.Core.Policy;
-using CodexClaudeRelay.Core.Pricing;
 using CodexClaudeRelay.Core.Protocol;
 
 namespace CodexClaudeRelay.Core.Broker;
@@ -11,8 +10,8 @@ public sealed class RelayBroker
 {
     private const long SuspiciousClaudeCacheCreationTokens = 15_000;
 
-    private readonly IReadOnlyDictionary<RelaySide, IRelayAdapter> _adapters;
-    private readonly IReadOnlyDictionary<RelaySide, IRelayAdapter> _fallbackAdapters;
+    private readonly IReadOnlyDictionary<string, IRelayAdapter> _adapters;
+    private readonly IReadOnlyDictionary<string, IRelayAdapter> _fallbackAdapters;
     private readonly IRelaySessionStore _sessionStore;
     private readonly IEventLogWriter _eventLogWriter;
     private readonly RelayBrokerOptions _options;
@@ -24,8 +23,8 @@ public sealed class RelayBroker
         IEnumerable<IRelayAdapter>? fallbackAdapters = null,
         RelayBrokerOptions? options = null)
     {
-        _adapters = adapters.ToDictionary(adapter => adapter.Side);
-        _fallbackAdapters = fallbackAdapters?.ToDictionary(adapter => adapter.Side) ?? new Dictionary<RelaySide, IRelayAdapter>();
+        _adapters = adapters.ToDictionary(adapter => adapter.Role);
+        _fallbackAdapters = fallbackAdapters?.ToDictionary(adapter => adapter.Role) ?? new Dictionary<string, IRelayAdapter>(StringComparer.Ordinal);
         _sessionStore = sessionStore;
         _eventLogWriter = eventLogWriter;
         _options = options ?? new RelayBrokerOptions();
@@ -58,7 +57,7 @@ public sealed class RelayBroker
                 new RelayLogEvent(
                     DateTimeOffset.Now,
                     "session.reloaded",
-                    State.ActiveSide,
+                    State.ActiveAgent,
                     "Broker reloaded. Native session handles and cumulative handle baselines were reset. Cumulative token totals were preserved."),
                 cancellationToken);
         }
@@ -70,18 +69,18 @@ public sealed class RelayBroker
                 new RelayLogEvent(
                     DateTimeOffset.Now,
                     "broker.options",
-                    State.ActiveSide,
+                    State.ActiveAgent,
                     BuildOptionsSummary()),
                 cancellationToken);
         }
     }
 
-    public async Task<IReadOnlyDictionary<RelaySide, AdapterStatus>> GetAdapterStatusesAsync(CancellationToken cancellationToken)
+    public async Task<IReadOnlyDictionary<string, AdapterStatus>> GetAdapterStatusesAsync(CancellationToken cancellationToken)
     {
-        var statuses = new Dictionary<RelaySide, AdapterStatus>();
-        foreach (var adapter in _adapters.Values.OrderBy(item => item.Side))
+        var statuses = new Dictionary<string, AdapterStatus>(StringComparer.Ordinal);
+        foreach (var adapter in _adapters.Values.OrderBy(item => item.Role, StringComparer.Ordinal))
         {
-            statuses[adapter.Side] = await adapter.GetStatusAsync(cancellationToken);
+            statuses[adapter.Role] = await adapter.GetStatusAsync(cancellationToken);
         }
 
         return statuses;
@@ -89,7 +88,7 @@ public sealed class RelayBroker
 
     public async Task StartSessionAsync(
         string sessionId,
-        RelaySide firstSide,
+        string firstRole,
         string firstPrompt,
         CancellationToken cancellationToken)
     {
@@ -97,7 +96,7 @@ public sealed class RelayBroker
         {
             SessionId = sessionId,
             Status = RelaySessionStatus.Active,
-            ActiveSide = firstSide,
+            ActiveAgent = firstRole,
             CurrentTurn = 1,
             PendingPrompt = firstPrompt,
             RepairAttempts = 0,
@@ -137,11 +136,11 @@ public sealed class RelayBroker
         };
 
         await PersistAndLogAsync(
-            new RelayLogEvent(DateTimeOffset.Now, "session.started", firstSide, "Relay session started.", firstPrompt),
+            new RelayLogEvent(DateTimeOffset.Now, "session.started", firstRole, "Relay session started.", firstPrompt),
             cancellationToken);
 
         await PersistAndLogAsync(
-            new RelayLogEvent(DateTimeOffset.Now, "broker.options", firstSide, BuildOptionsSummary()),
+            new RelayLogEvent(DateTimeOffset.Now, "broker.options", firstRole, BuildOptionsSummary()),
             cancellationToken);
     }
 
@@ -151,7 +150,7 @@ public sealed class RelayBroker
         State.LastError = reason;
         State.UpdatedAt = DateTimeOffset.Now;
         await PersistAndLogAsync(
-            new RelayLogEvent(DateTimeOffset.Now, "session.paused", State.ActiveSide, reason),
+            new RelayLogEvent(DateTimeOffset.Now, "session.paused", State.ActiveAgent, reason),
             cancellationToken);
     }
 
@@ -163,7 +162,7 @@ public sealed class RelayBroker
         State.PendingApproval = null;
         State.UpdatedAt = DateTimeOffset.Now;
         await PersistAndLogAsync(
-            new RelayLogEvent(DateTimeOffset.Now, "session.stopped", State.ActiveSide, reason),
+            new RelayLogEvent(DateTimeOffset.Now, "session.stopped", State.ActiveAgent, reason),
             cancellationToken);
     }
 
@@ -201,7 +200,7 @@ public sealed class RelayBroker
             new RelayLogEvent(
                 DateTimeOffset.Now,
                 "approval.session_rule.saved",
-                pendingApproval.Side,
+                pendingApproval.Role,
                 $"Saved session approval rule for {pendingApproval.Title}.",
                 pendingApproval.Payload),
             cancellationToken);
@@ -216,7 +215,7 @@ public sealed class RelayBroker
             new RelayLogEvent(
                 DateTimeOffset.Now,
                 "approval.session_rule.applied",
-                pendingApproval.Side,
+                pendingApproval.Role,
                 $"Applied saved session approval rule for {matchedRule.Title}.",
                 pendingApproval.Payload),
             cancellationToken);
@@ -230,7 +229,7 @@ public sealed class RelayBroker
             new RelayLogEvent(
                 DateTimeOffset.Now,
                 "approval.auto_mode.applied",
-                pendingApproval.Side,
+                pendingApproval.Role,
                 $"Auto-approved {pendingApproval.Title} because dangerous auto-approve mode is enabled.",
                 pendingApproval.Payload),
             cancellationToken);
@@ -245,7 +244,7 @@ public sealed class RelayBroker
             pendingApproval.Id,
             State.SessionId,
             State.CurrentTurn,
-            pendingApproval.Side,
+            pendingApproval.Role,
             pendingApproval.Category,
             pendingApproval.Title,
             pendingApproval.Message,
@@ -264,7 +263,7 @@ public sealed class RelayBroker
             new RelayLogEvent(
                 now,
                 "approval.queue.enqueued",
-                pendingApproval.Side,
+                pendingApproval.Role,
                 $"Queued approval for {pendingApproval.Title}.",
                 pendingApproval.Payload),
             cancellationToken);
@@ -288,7 +287,7 @@ public sealed class RelayBroker
             pendingApproval.Id,
             State.SessionId,
             State.CurrentTurn,
-            pendingApproval.Side,
+            pendingApproval.Role,
             pendingApproval.Category,
             pendingApproval.Title,
             pendingApproval.Message,
@@ -318,7 +317,7 @@ public sealed class RelayBroker
             new RelayLogEvent(
                 now,
                 "approval.queue.resolved",
-                pendingApproval.Side,
+                pendingApproval.Role,
                 $"Resolved queued approval for {pendingApproval.Title} as {status}.",
                 pendingApproval.Payload),
             cancellationToken);
@@ -338,7 +337,7 @@ public sealed class RelayBroker
             new RelayLogEvent(
                 DateTimeOffset.Now,
                 "approval.session_rules.cleared",
-                State.ActiveSide,
+                State.ActiveAgent,
                 $"Cleared {clearedCount} saved session approval rule(s)."),
             cancellationToken);
     }
@@ -367,7 +366,7 @@ public sealed class RelayBroker
                 new RelayLogEvent(
                     DateTimeOffset.Now,
                     "session.paused",
-                    pendingApproval.Side,
+                    pendingApproval.Role,
                     State.LastError,
                     pendingApproval.Payload),
                 cancellationToken);
@@ -380,7 +379,7 @@ public sealed class RelayBroker
             new RelayLogEvent(
                 DateTimeOffset.Now,
                 "session.resumed",
-                pendingApproval.Side,
+                pendingApproval.Role,
                 $"Approval completed for {pendingApproval.Title}. Session can continue.",
                 pendingApproval.Payload),
             cancellationToken);
@@ -400,12 +399,12 @@ public sealed class RelayBroker
 
         if (string.IsNullOrWhiteSpace(State.PendingPrompt))
         {
-            return await PauseWithResultAsync("No pending prompt exists for the active side.", cancellationToken);
+            return await PauseWithResultAsync("No pending prompt exists for the active role.", cancellationToken);
         }
 
-        if (!_adapters.TryGetValue(State.ActiveSide, out var sourceAdapter))
+        if (!_adapters.TryGetValue(State.ActiveAgent, out var sourceAdapter))
         {
-            return await PauseWithResultAsync($"No adapter is registered for {State.ActiveSide}.", cancellationToken);
+            return await PauseWithResultAsync($"No adapter is registered for {State.ActiveAgent}.", cancellationToken);
         }
 
         var rotationReason = EvaluateRotationReason();
@@ -414,17 +413,17 @@ public sealed class RelayBroker
             await RotateSessionAsync(rotationReason, cancellationToken);
         }
 
-        State.NativeSessionHandles.TryGetValue(State.ActiveSide.ToString(), out var existingHandle);
+        State.NativeSessionHandles.TryGetValue(State.ActiveAgent.ToString(), out var existingHandle);
         var carryForward = TryBuildCarryForwardBlock();
         var turnContext = new RelayTurnContext(
             State.SessionId,
             State.CurrentTurn,
-            State.ActiveSide,
+            State.ActiveAgent,
             State.PendingPrompt,
             existingHandle,
             carryForward);
         await PersistAndLogAsync(
-            new RelayLogEvent(DateTimeOffset.Now, "turn.started", State.ActiveSide, $"Turn {State.CurrentTurn} submitted.", State.PendingPrompt),
+            new RelayLogEvent(DateTimeOffset.Now, "turn.started", State.ActiveAgent, $"Turn {State.CurrentTurn} submitted.", State.PendingPrompt),
             cancellationToken);
         if (carryForward is not null)
         {
@@ -444,7 +443,7 @@ public sealed class RelayBroker
                 new RelayLogEvent(
                     DateTimeOffset.Now,
                     "summary.loaded",
-                    State.ActiveSide,
+                    State.ActiveAgent,
                     $"Carry-forward injected into turn {State.CurrentTurn} ({cfBytes} bytes, {cfFields} fields).",
                     cfPayload),
                 cancellationToken);
@@ -455,7 +454,7 @@ public sealed class RelayBroker
         try
         {
             turnResult = await RunWithTurnTimeoutAsync(
-                State.ActiveSide,
+                State.ActiveAgent,
                 "turn",
                 token => sourceAdapter.RunTurnAsync(turnContext, token),
                 cancellationToken);
@@ -467,13 +466,13 @@ public sealed class RelayBroker
         catch (Exception ex)
         {
             return await PauseWithResultAsync(
-                $"Adapter turn failed on {State.ActiveSide}: {ex.GetType().Name}: {ex.Message}",
+                $"Adapter turn failed on {State.ActiveAgent}: {ex.GetType().Name}: {ex.Message}",
                 cancellationToken);
         }
 
         CaptureSessionHandle(turnResult.SessionHandle);
         var budgetTrip = await CaptureUsageAsync(
-            State.ActiveSide,
+            State.ActiveAgent,
             turnResult.Usage,
             cancellationToken,
             isFallback: false,
@@ -499,10 +498,10 @@ public sealed class RelayBroker
 
             return await TryDowngradeTurnAsync(turnContext, budgetTrip, cancellationToken);
         }
-        var reviewPendingApproval = await LogObservedActionsAsync(State.ActiveSide, turnResult.ObservedActions, cancellationToken);
+        var reviewPendingApproval = await LogObservedActionsAsync(State.ActiveAgent, turnResult.ObservedActions, cancellationToken);
         if (TryGetOutstandingApprovalRequest(turnResult.ObservedActions, out var approvalRequest))
         {
-            return await AwaitApprovalAsync(State.ActiveSide, approvalRequest, cancellationToken);
+            return await AwaitApprovalAsync(State.ActiveAgent, approvalRequest, cancellationToken);
         }
         if (reviewPendingApproval is not null)
         {
@@ -513,9 +512,9 @@ public sealed class RelayBroker
                 $"Review required for {reviewPendingApproval.Title}.",
                 State);
         }
-        await LogDiagnosticsAsync(State.ActiveSide, turnResult.Diagnostics, cancellationToken);
+        await LogDiagnosticsAsync(State.ActiveAgent, turnResult.Diagnostics, cancellationToken);
         await PersistAndLogAsync(
-            new RelayLogEvent(DateTimeOffset.Now, "turn.completed", State.ActiveSide, $"Turn {State.CurrentTurn} completed.", turnResult.Output),
+            new RelayLogEvent(DateTimeOffset.Now, "turn.completed", State.ActiveAgent, $"Turn {State.CurrentTurn} completed.", turnResult.Output),
             cancellationToken);
 
         if (TryAcceptHandoff(turnResult.Output, out var handoff, out var failureReason))
@@ -528,7 +527,7 @@ public sealed class RelayBroker
         {
             State.RepairAttempts++;
             await PersistAndLogAsync(
-                new RelayLogEvent(DateTimeOffset.Now, "repair.requested", State.ActiveSide, failureReason!, lastInvalidOutput),
+                new RelayLogEvent(DateTimeOffset.Now, "repair.requested", State.ActiveAgent, failureReason!, lastInvalidOutput),
                 cancellationToken);
 
             if (State.RepairAttempts > _options.MaxRepairAttempts)
@@ -539,11 +538,11 @@ public sealed class RelayBroker
             }
 
             var repairPrompt = BuildRepairPrompt();
-            State.NativeSessionHandles.TryGetValue(State.ActiveSide.ToString(), out var repairSessionHandle);
+            State.NativeSessionHandles.TryGetValue(State.ActiveAgent.ToString(), out var repairSessionHandle);
             var repairContext = new RelayRepairContext(
                 State.SessionId,
                 State.CurrentTurn,
-                State.ActiveSide,
+                State.ActiveAgent,
                 State.PendingPrompt,
                 lastInvalidOutput,
                 repairPrompt,
@@ -552,7 +551,7 @@ public sealed class RelayBroker
             try
             {
                 repairResult = await RunWithTurnTimeoutAsync(
-                    State.ActiveSide,
+                    State.ActiveAgent,
                     "repair",
                     token => sourceAdapter.RunRepairAsync(repairContext, token),
                     cancellationToken);
@@ -564,13 +563,13 @@ public sealed class RelayBroker
             catch (Exception ex)
             {
                 return await PauseWithResultAsync(
-                    $"Adapter repair failed on {State.ActiveSide}: {ex.GetType().Name}: {ex.Message}",
+                    $"Adapter repair failed on {State.ActiveAgent}: {ex.GetType().Name}: {ex.Message}",
                     cancellationToken);
             }
 
             CaptureSessionHandle(repairResult.SessionHandle);
             budgetTrip = await CaptureUsageAsync(
-                State.ActiveSide,
+                State.ActiveAgent,
                 repairResult.Usage,
                 cancellationToken,
                 isFallback: false,
@@ -596,10 +595,10 @@ public sealed class RelayBroker
 
                 return await TryDowngradeRepairAsync(repairContext, budgetTrip, cancellationToken);
             }
-            reviewPendingApproval = await LogObservedActionsAsync(State.ActiveSide, repairResult.ObservedActions, cancellationToken);
+            reviewPendingApproval = await LogObservedActionsAsync(State.ActiveAgent, repairResult.ObservedActions, cancellationToken);
             if (TryGetOutstandingApprovalRequest(repairResult.ObservedActions, out var repairApprovalRequest))
             {
-                return await AwaitApprovalAsync(State.ActiveSide, repairApprovalRequest, cancellationToken);
+                return await AwaitApprovalAsync(State.ActiveAgent, repairApprovalRequest, cancellationToken);
             }
             if (reviewPendingApproval is not null)
             {
@@ -610,9 +609,9 @@ public sealed class RelayBroker
                     $"Review required for {reviewPendingApproval.Title}.",
                     State);
             }
-            await LogDiagnosticsAsync(State.ActiveSide, repairResult.Diagnostics, cancellationToken);
+            await LogDiagnosticsAsync(State.ActiveAgent, repairResult.Diagnostics, cancellationToken);
             await PersistAndLogAsync(
-                new RelayLogEvent(DateTimeOffset.Now, "repair.completed", State.ActiveSide, $"Repair attempt {State.RepairAttempts} completed.", repairResult.Output),
+                new RelayLogEvent(DateTimeOffset.Now, "repair.completed", State.ActiveAgent, $"Repair attempt {State.RepairAttempts} completed.", repairResult.Output),
                 cancellationToken);
 
             if (TryAcceptHandoff(repairResult.Output, out handoff, out failureReason))
@@ -691,7 +690,7 @@ public sealed class RelayBroker
         }
         State.Constraints = carriedConstraints;
         State.PendingPrompt = handoff.Prompt;
-        State.ActiveSide = handoff.Target;
+        State.ActiveAgent = handoff.Target;
         State.CurrentTurn++;
         State.TurnsSinceLastRotation++;
         State.RepairAttempts = 0;
@@ -703,16 +702,16 @@ public sealed class RelayBroker
             new RelayLogEvent(DateTimeOffset.Now, "handoff.accepted", handoff.Source, $"Accepted handoff to {handoff.Target}.", handoff.Prompt),
             cancellationToken);
 
-        return new BrokerAdvanceResult(true, false, repaired, "Handoff accepted and queued for the opposite side.", State);
+        return new BrokerAdvanceResult(true, false, repaired, "Handoff accepted and queued for the opposite role.", State);
     }
 
     private bool TryAcceptHandoff(string rawOutput, out HandoffEnvelope? handoff, out string? failureReason)
     {
-        var expectedTarget = State.ActiveSide == RelaySide.Codex ? RelaySide.Claude : RelaySide.Codex;
+        var expectedTarget = State.ActiveAgent == AgentRole.Codex ? AgentRole.Claude : AgentRole.Codex;
         if (!HandoffParser.TryParseWithFallback(
                 rawOutput,
                 State.PendingPrompt,
-                State.ActiveSide,
+                State.ActiveAgent,
                 expectedTarget,
                 State.SessionId,
                 State.CurrentTurn,
@@ -723,9 +722,9 @@ public sealed class RelayBroker
             return false;
         }
 
-        if (handoff!.Source != State.ActiveSide)
+        if (handoff!.Source != State.ActiveAgent)
         {
-            failureReason = $"Handoff source mismatch. Expected {State.ActiveSide}, got {handoff.Source}.";
+            failureReason = $"Handoff source mismatch. Expected {State.ActiveAgent}, got {handoff.Source}.";
             handoff = null;
             return false;
         }
@@ -740,13 +739,13 @@ public sealed class RelayBroker
     }
 
     private async Task<BrokerAdvanceResult> AwaitApprovalAsync(
-        RelaySide side,
+        string role,
         RelayObservedAction approvalRequest,
         CancellationToken cancellationToken)
     {
         var pendingApproval = new RelayPendingApproval(
             Guid.NewGuid().ToString("N"),
-            side,
+            role,
             approvalRequest.Category ?? "transport",
             approvalRequest.Title ?? approvalRequest.EventType,
             approvalRequest.Message,
@@ -760,7 +759,7 @@ public sealed class RelayBroker
             false,
             true,
             false,
-            $"Approval requested by {side}: {approvalRequest.Message}",
+            $"Approval requested by {role}: {approvalRequest.Message}",
             State);
     }
 
@@ -775,7 +774,7 @@ public sealed class RelayBroker
             State.PendingApproval.Id,
             State.SessionId,
             State.CurrentTurn,
-            State.PendingApproval.Side,
+            State.PendingApproval.Role,
             State.PendingApproval.Category,
             State.PendingApproval.Title,
             State.PendingApproval.Message,
@@ -815,7 +814,7 @@ public sealed class RelayBroker
             return;
         }
 
-        var sideKey = State.ActiveSide.ToString();
+        var sideKey = State.ActiveAgent.ToString();
         if (State.NativeSessionHandles.TryGetValue(sideKey, out var previousHandle) &&
             !string.IsNullOrWhiteSpace(previousHandle) &&
             !string.Equals(previousHandle, sessionHandle, StringComparison.Ordinal))
@@ -826,7 +825,7 @@ public sealed class RelayBroker
         State.NativeSessionHandles[sideKey] = sessionHandle;
     }
 
-    private async Task LogDiagnosticsAsync(RelaySide side, string? diagnostics, CancellationToken cancellationToken)
+    private async Task LogDiagnosticsAsync(string role, string? diagnostics, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(diagnostics))
         {
@@ -834,12 +833,12 @@ public sealed class RelayBroker
         }
 
         await PersistAndLogAsync(
-            new RelayLogEvent(DateTimeOffset.Now, "adapter.diagnostics", side, $"Diagnostics captured for {side}.", diagnostics),
+            new RelayLogEvent(DateTimeOffset.Now, "adapter.diagnostics", role, $"Diagnostics captured for {role}.", diagnostics),
             cancellationToken);
     }
 
     private async Task<RelayPendingApproval?> LogObservedActionsAsync(
-        RelaySide side,
+        string role,
         IReadOnlyList<RelayObservedAction>? observedActions,
         CancellationToken cancellationToken)
     {
@@ -861,19 +860,19 @@ public sealed class RelayBroker
                 new RelayLogEvent(
                     DateTimeOffset.Now,
                     action.EventType,
-                    side,
+                    role,
                     action.Message,
                     action.Payload),
                 cancellationToken);
 
-            reviewPendingApproval ??= await LogToolPolicyGapAdvisoryAsync(side, action, cancellationToken);
+            reviewPendingApproval ??= await LogToolPolicyGapAdvisoryAsync(role, action, cancellationToken);
         }
 
         return reviewPendingApproval;
     }
 
     private async Task<RelayPendingApproval?> LogToolPolicyGapAdvisoryAsync(
-        RelaySide side,
+        string role,
         RelayObservedAction action,
         CancellationToken cancellationToken)
     {
@@ -911,7 +910,7 @@ public sealed class RelayBroker
         var policyKey = RelayApprovalPolicy.BuildToolReviewPolicyKey(action.Category, title);
         var pendingApproval = new RelayPendingApproval(
             Guid.NewGuid().ToString("N"),
-            side,
+            role,
             action.Category,
             RelayApprovalPolicy.GetApprovalTitle(action.Category),
             reviewMessage,
@@ -938,7 +937,7 @@ public sealed class RelayBroker
                 new RelayLogEvent(
                     DateTimeOffset.Now,
                     "policy.applied",
-                    side,
+                    role,
                     $"{reviewMessage}{Environment.NewLine}Policy: {defaultReason}",
                     action.Payload),
                 cancellationToken);
@@ -949,14 +948,14 @@ public sealed class RelayBroker
                     defaultDecision is RelayApprovalDecision.ApproveOnce or RelayApprovalDecision.ApproveForSession
                         ? "approval.granted"
                         : "approval.denied",
-                    side,
+                    role,
                     $"{reviewMessage}{Environment.NewLine}Policy: {defaultReason}",
                     action.Payload),
                 cancellationToken);
             return null;
         }
 
-        var advisoryKey = $"{side}:{policyKey}";
+        var advisoryKey = $"{role}:{policyKey}";
         if (State.PolicyGapAdvisoriesFired.Contains(advisoryKey, StringComparer.Ordinal))
         {
             return null;
@@ -967,7 +966,7 @@ public sealed class RelayBroker
             new RelayLogEvent(
                 DateTimeOffset.Now,
                 $"{action.Category}.review_required",
-                side,
+                role,
                 $"{reviewMessage}{Environment.NewLine}Current product path treats {action.Category} activity as audit-visible but operator review is still required for policy hardening.",
                 action.Payload),
             cancellationToken);
@@ -1007,7 +1006,7 @@ public sealed class RelayBroker
     }
 
     private async Task<BudgetTrip?> CaptureUsageAsync(
-        RelaySide side,
+        string role,
         RelayUsageMetrics? usage,
         CancellationToken cancellationToken,
         bool isFallback = false,
@@ -1022,8 +1021,8 @@ public sealed class RelayBroker
                     new RelayLogEvent(
                         DateTimeOffset.Now,
                         "adapter.usage_unknown",
-                        side,
-                        $"No usage reported for {side} turn {State.CurrentTurn}. Token spend for this turn is untracked in cumulative totals."),
+                        role,
+                        $"No usage reported for {role} turn {State.CurrentTurn}. Token spend for this turn is untracked in cumulative totals."),
                     cancellationToken);
             }
 
@@ -1038,42 +1037,42 @@ public sealed class RelayBroker
             State.LastCumulativeByHandle[handle] = usage;
         }
 
-        State.LastUsageBySide[side.ToString()] = effectiveUsage;
+        State.LastUsageBySide[role.ToString()] = effectiveUsage;
         State.TotalInputTokens += effectiveUsage.InputTokens ?? 0;
         State.TotalOutputTokens += effectiveUsage.OutputTokens ?? 0;
         State.TotalCacheCreationInputTokens += effectiveUsage.CacheCreationInputTokens ?? 0;
         State.TotalCacheReadInputTokens += effectiveUsage.CacheReadInputTokens ?? 0;
         var costDelta = effectiveUsage.CostUsd ?? 0;
-        if (side == RelaySide.Claude)
+        if (role == AgentRole.Claude)
         {
             State.TotalCostClaudeUsd += costDelta;
         }
-        else if (side == RelaySide.Codex)
+        else if (role == AgentRole.Codex)
         {
             State.TotalCostCodexUsd += costDelta;
         }
 
         var cacheReadRatio = CalculateCacheReadRatio(effectiveUsage);
         if (!isFallback &&
-            side == RelaySide.Claude &&
+            role == AgentRole.Claude &&
             State.TurnsSinceLastRotation >= 2 &&
             cacheReadRatio.HasValue)
         {
             State.CacheReadRatioByTurn.Add(cacheReadRatio.Value);
-            var sideKey = side.ToString();
+            var sideKey = role.ToString();
             State.ConsecutiveLowCacheTurnsBySide[sideKey] = cacheReadRatio.Value < _options.CacheReadRatioFloor
-                ? GetLowCacheTurnCount(side) + 1
+                ? GetLowCacheTurnCount(role) + 1
                 : 0;
         }
 
-        var codexRateCardSummary = side == RelaySide.Codex
-            ? $", rate_card={CodexPricing.DescribeRateCard()}"
+        var codexRateCardSummary = role == AgentRole.Codex
+            ? $", rate_card={"(rate-card removed — DAD-v2 reset)"}"
             : string.Empty;
 
         var summary =
             usageIsCumulative && !string.IsNullOrWhiteSpace(handle)
-                ? $"Usage captured for {side}. cumulative(input={usage.InputTokens?.ToString() ?? "?"}, output={usage.OutputTokens?.ToString() ?? "?"}, cache_read={usage.CacheReadInputTokens?.ToString() ?? "?"}, cache_create={usage.CacheCreationInputTokens?.ToString() ?? "?"}, cost_usd={(usage.CostUsd?.ToString("F4") ?? "?")}); delta(input={effectiveUsage.InputTokens?.ToString() ?? "?"}, output={effectiveUsage.OutputTokens?.ToString() ?? "?"}, cache_read={effectiveUsage.CacheReadInputTokens?.ToString() ?? "?"}, cache_create={effectiveUsage.CacheCreationInputTokens?.ToString() ?? "?"}, cost_usd={(effectiveUsage.CostUsd?.ToString("F4") ?? "?")}, model={effectiveUsage.Model ?? "unknown"}{codexRateCardSummary}); handle={handle}"
-                : $"Usage captured for {side}. input={effectiveUsage.InputTokens?.ToString() ?? "?"}, " +
+                ? $"Usage captured for {role}. cumulative(input={usage.InputTokens?.ToString() ?? "?"}, output={usage.OutputTokens?.ToString() ?? "?"}, cache_read={usage.CacheReadInputTokens?.ToString() ?? "?"}, cache_create={usage.CacheCreationInputTokens?.ToString() ?? "?"}, cost_usd={(usage.CostUsd?.ToString("F4") ?? "?")}); delta(input={effectiveUsage.InputTokens?.ToString() ?? "?"}, output={effectiveUsage.OutputTokens?.ToString() ?? "?"}, cache_read={effectiveUsage.CacheReadInputTokens?.ToString() ?? "?"}, cache_create={effectiveUsage.CacheCreationInputTokens?.ToString() ?? "?"}, cost_usd={(effectiveUsage.CostUsd?.ToString("F4") ?? "?")}, model={effectiveUsage.Model ?? "unknown"}{codexRateCardSummary}); handle={handle}"
+                : $"Usage captured for {role}. input={effectiveUsage.InputTokens?.ToString() ?? "?"}, " +
                   $"output={effectiveUsage.OutputTokens?.ToString() ?? "?"}, " +
                   $"cache_read={effectiveUsage.CacheReadInputTokens?.ToString() ?? "?"}, " +
                   $"cache_create={effectiveUsage.CacheCreationInputTokens?.ToString() ?? "?"}, " +
@@ -1081,24 +1080,24 @@ public sealed class RelayBroker
                   $"model={effectiveUsage.Model ?? "unknown"}{codexRateCardSummary}";
 
         await PersistAndLogAsync(
-            new RelayLogEvent(DateTimeOffset.Now, "adapter.usage", side, summary, usage.RawJson),
+            new RelayLogEvent(DateTimeOffset.Now, "adapter.usage", role, summary, usage.RawJson),
             cancellationToken);
 
-        await LogCodexPricingFallbackAsync(side, effectiveUsage, cancellationToken);
-        await LogCodexRateCardStaleAsync(side, cancellationToken);
-        await LogCostAvailabilitySignalsAsync(side, effectiveUsage, cancellationToken);
-        await LogCacheInflationSignalAsync(side, effectiveUsage, cancellationToken);
-        await LogClaudeCostCeilingDisabledAsync(side, effectiveUsage, cancellationToken);
-        if (await TryRotateForClaudeCostCeilingAsync(side, effectiveUsage, cancellationToken))
+        await LogCodexPricingFallbackAsync(role, effectiveUsage, cancellationToken);
+        await LogCodexRateCardStaleAsync(role, cancellationToken);
+        await LogCostAvailabilitySignalsAsync(role, effectiveUsage, cancellationToken);
+        await LogCacheInflationSignalAsync(role, effectiveUsage, cancellationToken);
+        await LogClaudeCostCeilingDisabledAsync(role, effectiveUsage, cancellationToken);
+        if (await TryRotateForClaudeCostCeilingAsync(role, effectiveUsage, cancellationToken))
         {
             return null;
         }
 
-        return await EvaluateBudgetSignalsAsync(side, effectiveUsage, cacheReadRatio, cancellationToken);
+        return await EvaluateBudgetSignalsAsync(role, effectiveUsage, cacheReadRatio, cancellationToken);
     }
 
     private async Task<BudgetTrip?> EvaluateBudgetSignalsAsync(
-        RelaySide side,
+        string role,
         RelayUsageMetrics usage,
         double? cacheReadRatio,
         CancellationToken cancellationToken)
@@ -1106,22 +1105,22 @@ public sealed class RelayBroker
         if (State.TotalOutputTokens >= _options.MaxCumulativeOutputTokens)
         {
             var reason = await TripBudgetAsync(
-                side,
+                role,
                 "output_budget_exceeded",
-                $"Cumulative output token budget exceeded for {side}. Total output tokens: {State.TotalOutputTokens}.",
+                $"Cumulative output token budget exceeded for {role}. Total output tokens: {State.TotalOutputTokens}.",
                 usage.RawJson,
                 cancellationToken);
             return new BudgetTrip("output_budget_exceeded", reason);
         }
 
-        if (side == RelaySide.Claude &&
+        if (role == AgentRole.Claude &&
             cacheReadRatio.HasValue &&
-            GetLowCacheTurnCount(side) >= _options.ConsecutiveLowCacheTurnsThreshold)
+            GetLowCacheTurnCount(role) >= _options.ConsecutiveLowCacheTurnsThreshold)
         {
             var reason = await TripBudgetAsync(
-                side,
+                role,
                 "cache_regression",
-                $"Cache read ratio stayed below {_options.CacheReadRatioFloor:F2} for {GetLowCacheTurnCount(side)} consecutive turns on {side}.",
+                $"Cache read ratio stayed below {_options.CacheReadRatioFloor:F2} for {GetLowCacheTurnCount(role)} consecutive turns on {role}.",
                 usage.RawJson,
                 cancellationToken);
             return new BudgetTrip("cache_regression", reason);
@@ -1131,7 +1130,7 @@ public sealed class RelayBroker
     }
 
     private async Task<string> TripBudgetAsync(
-        RelaySide side,
+        string role,
         string signal,
         string reason,
         string? payload,
@@ -1141,7 +1140,7 @@ public sealed class RelayBroker
         State.UpdatedAt = DateTimeOffset.Now;
 
         await PersistAndLogAsync(
-            new RelayLogEvent(DateTimeOffset.Now, "budget.tripped", side, reason, payload),
+            new RelayLogEvent(DateTimeOffset.Now, "budget.tripped", role, reason, payload),
             cancellationToken);
 
         return reason;
@@ -1162,11 +1161,11 @@ public sealed class RelayBroker
     }
 
     private async Task LogCostAvailabilitySignalsAsync(
-        RelaySide side,
+        string role,
         RelayUsageMetrics usage,
         CancellationToken cancellationToken)
     {
-        if (side != RelaySide.Claude)
+        if (role != AgentRole.Claude)
         {
             return;
         }
@@ -1192,18 +1191,18 @@ public sealed class RelayBroker
             new RelayLogEvent(
                 DateTimeOffset.Now,
                 "claude.cost.absent",
-                side,
+                role,
                 $"Claude reported token usage but no positive CLI-estimated cost. This can happen on subscription plans, provider-routed deployments, or CLI versions without cost reporting. claude_cli_version={usage.CliVersion ?? "unknown"}",
                 usage.RawJson),
             cancellationToken);
     }
 
     private async Task LogCodexPricingFallbackAsync(
-        RelaySide side,
+        string role,
         RelayUsageMetrics usage,
         CancellationToken cancellationToken)
     {
-        if (side != RelaySide.Codex ||
+        if (role != AgentRole.Codex ||
             string.IsNullOrWhiteSpace(usage.PricingFallbackReason) ||
             State.CodexPricingFallbackAdvisoryFired)
         {
@@ -1215,18 +1214,18 @@ public sealed class RelayBroker
             new RelayLogEvent(
                 DateTimeOffset.Now,
                 "codex.pricing.fallback",
-                side,
-                $"{usage.PricingFallbackReason}. Rate card: {CodexPricing.DescribeRateCard()}. codex_model={usage.Model ?? "unknown"}",
+                role,
+                $"{usage.PricingFallbackReason}. Rate card: {"(rate-card removed — DAD-v2 reset)"}. codex_model={usage.Model ?? "unknown"}",
                 usage.RawJson),
             cancellationToken);
     }
 
     private async Task LogClaudeCostCeilingDisabledAsync(
-        RelaySide side,
+        string role,
         RelayUsageMetrics usage,
         CancellationToken cancellationToken)
     {
-        if (side != RelaySide.Claude ||
+        if (role != AgentRole.Claude ||
             !_options.MaxClaudeCostUsd.HasValue ||
             State.ClaudeCostCeilingDisabledAdvisoryFired ||
             string.IsNullOrWhiteSpace(usage.AuthMethod) ||
@@ -1240,18 +1239,18 @@ public sealed class RelayBroker
             new RelayLogEvent(
                 DateTimeOffset.Now,
                 "cost.ceiling.disabled",
-                side,
+                role,
                 $"Configured Claude cost ceiling is inactive for this session segment because auth is not api-key. ceiling_usd={_options.MaxClaudeCostUsd.Value:F4}, observed_auth_method={usage.AuthMethod}.",
                 usage.RawJson),
             cancellationToken);
     }
 
     private async Task LogCacheInflationSignalAsync(
-        RelaySide side,
+        string role,
         RelayUsageMetrics usage,
         CancellationToken cancellationToken)
     {
-        if (side != RelaySide.Claude)
+        if (role != AgentRole.Claude)
         {
             return;
         }
@@ -1278,23 +1277,23 @@ public sealed class RelayBroker
             new RelayLogEvent(
                 DateTimeOffset.Now,
                 "cache.inflation.suspected",
-                side,
+                role,
                 $"cache_creation_input_tokens={cacheCreationTokens}, input_tokens={nonCachedInputTokens}, claude_cli_version={usage.CliVersion ?? "unknown"}. Possible Claude CLI cache-creation inflation (see Anthropic issue #46917). Further inflation this session will remain visible only in adapter.usage totals.",
                 usage.RawJson),
             cancellationToken);
     }
 
     private async Task LogCodexRateCardStaleAsync(
-        RelaySide side,
+        string role,
         CancellationToken cancellationToken)
     {
-        if (side != RelaySide.Codex || State.CodexRateCardStaleAdvisoryFired)
+        if (role != AgentRole.Codex || State.CodexRateCardStaleAdvisoryFired)
         {
             return;
         }
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var ageDays = today.DayNumber - CodexPricing.RateCardAsOf.DayNumber;
+        var ageDays = today.DayNumber - DateOnly.FromDateTime(DateTime.UnixEpoch).DayNumber;
         if (ageDays < 180)
         {
             return;
@@ -1305,17 +1304,17 @@ public sealed class RelayBroker
             new RelayLogEvent(
                 DateTimeOffset.Now,
                 "codex.rate_card.stale",
-                side,
-                $"Codex rate card {CodexPricing.DescribeRateCard()} is {ageDays} days old. Local Codex cost estimates for this session may be inaccurate until the rate card is refreshed."),
+                role,
+                $"Codex rate card {"(rate-card removed — DAD-v2 reset)"} is {ageDays} days old. Local Codex cost estimates for this session may be inaccurate until the rate card is refreshed."),
             cancellationToken);
     }
 
     private async Task<bool> TryRotateForClaudeCostCeilingAsync(
-        RelaySide side,
+        string role,
         RelayUsageMetrics usage,
         CancellationToken cancellationToken)
     {
-        if (side != RelaySide.Claude || !_options.MaxClaudeCostUsd.HasValue)
+        if (role != AgentRole.Claude || !_options.MaxClaudeCostUsd.HasValue)
         {
             return false;
         }
@@ -1332,7 +1331,7 @@ public sealed class RelayBroker
         }
 
         var reason = await TripBudgetAsync(
-            side,
+            role,
             "claude_cost_ceiling",
             $"Claude api-key estimated cost ceiling reached for this session segment. segment_cost_usd={segmentCost:F4}, ceiling_usd={_options.MaxClaudeCostUsd.Value:F4}. Rotating session.",
             usage.RawJson,
@@ -1371,7 +1370,7 @@ public sealed class RelayBroker
         State.UpdatedAt = DateTimeOffset.Now;
 
         await PersistAndLogAsync(
-            new RelayLogEvent(DateTimeOffset.Now, "rotation.triggered", State.ActiveSide, reason, State.PendingPrompt),
+            new RelayLogEvent(DateTimeOffset.Now, "rotation.triggered", State.ActiveAgent, reason, State.PendingPrompt),
             cancellationToken);
 
         if (prunedBaselineCount > 0)
@@ -1380,14 +1379,14 @@ public sealed class RelayBroker
                 new RelayLogEvent(
                     DateTimeOffset.Now,
                     "handle.baseline.pruned",
-                    State.ActiveSide,
+                    State.ActiveAgent,
                     $"Pruned {prunedBaselineCount} stale cumulative-handle baseline(s) on rotation."),
                 cancellationToken);
         }
     }
 
-    private int GetLowCacheTurnCount(RelaySide side) =>
-        State.ConsecutiveLowCacheTurnsBySide.TryGetValue(side.ToString(), out var count)
+    private int GetLowCacheTurnCount(string role) =>
+        State.ConsecutiveLowCacheTurnsBySide.TryGetValue(role.ToString(), out var count)
             ? count
             : 0;
 
@@ -1396,13 +1395,13 @@ public sealed class RelayBroker
         BudgetTrip budgetTrip,
         CancellationToken cancellationToken)
     {
-        if (!_fallbackAdapters.TryGetValue(turnContext.SourceSide, out var fallbackAdapter))
+        if (!_fallbackAdapters.TryGetValue(turnContext.SourceRole, out var fallbackAdapter))
         {
             return await PauseWithResultAsync(budgetTrip.Reason, cancellationToken);
         }
 
         await PersistAndLogAsync(
-            new RelayLogEvent(DateTimeOffset.Now, "downgrade.started", turnContext.SourceSide, $"Retrying turn {turnContext.TurnNumber} through bounded fallback because of {budgetTrip.Signal}.", turnContext.Prompt),
+            new RelayLogEvent(DateTimeOffset.Now, "downgrade.started", turnContext.SourceRole, $"Retrying turn {turnContext.TurnNumber} through bounded fallback because of {budgetTrip.Signal}.", turnContext.Prompt),
             cancellationToken);
 
         RemoveActiveSessionHandle();
@@ -1410,7 +1409,7 @@ public sealed class RelayBroker
         var fallbackContext = new RelayTurnContext(
             turnContext.SessionId,
             turnContext.TurnNumber,
-            turnContext.SourceSide,
+            turnContext.SourceRole,
             turnContext.Prompt,
             ExistingSessionHandle: null);
 
@@ -1418,7 +1417,7 @@ public sealed class RelayBroker
         try
         {
             fallbackResult = await RunWithTurnTimeoutAsync(
-                turnContext.SourceSide,
+                turnContext.SourceRole,
                 "bounded fallback turn",
                 token => fallbackAdapter.RunTurnAsync(fallbackContext, token),
                 cancellationToken);
@@ -1434,13 +1433,13 @@ public sealed class RelayBroker
 
         CaptureSessionHandle(fallbackResult.SessionHandle);
         var fallbackBudgetTrip = await CaptureFallbackUsageAsync(
-            turnContext.SourceSide,
+            turnContext.SourceRole,
             fallbackResult,
             cancellationToken);
-        var reviewPendingApproval = await LogObservedActionsAsync(turnContext.SourceSide, fallbackResult.ObservedActions, cancellationToken);
+        var reviewPendingApproval = await LogObservedActionsAsync(turnContext.SourceRole, fallbackResult.ObservedActions, cancellationToken);
         if (TryGetOutstandingApprovalRequest(fallbackResult.ObservedActions, out var fallbackApprovalRequest))
         {
-            return await AwaitApprovalAsync(turnContext.SourceSide, fallbackApprovalRequest, cancellationToken);
+            return await AwaitApprovalAsync(turnContext.SourceRole, fallbackApprovalRequest, cancellationToken);
         }
         if (reviewPendingApproval is not null)
         {
@@ -1451,9 +1450,9 @@ public sealed class RelayBroker
                 $"Review required for {reviewPendingApproval.Title}.",
                 State);
         }
-        await LogDiagnosticsAsync(turnContext.SourceSide, fallbackResult.Diagnostics, cancellationToken);
+        await LogDiagnosticsAsync(turnContext.SourceRole, fallbackResult.Diagnostics, cancellationToken);
         await PersistAndLogAsync(
-            new RelayLogEvent(DateTimeOffset.Now, "downgrade.completed", turnContext.SourceSide, $"Bounded fallback completed for turn {turnContext.TurnNumber}.", fallbackResult.Output),
+            new RelayLogEvent(DateTimeOffset.Now, "downgrade.completed", turnContext.SourceRole, $"Bounded fallback completed for turn {turnContext.TurnNumber}.", fallbackResult.Output),
             cancellationToken);
 
         if (fallbackBudgetTrip is not null)
@@ -1478,13 +1477,13 @@ public sealed class RelayBroker
         BudgetTrip budgetTrip,
         CancellationToken cancellationToken)
     {
-        if (!_fallbackAdapters.TryGetValue(repairContext.SourceSide, out var fallbackAdapter))
+        if (!_fallbackAdapters.TryGetValue(repairContext.SourceRole, out var fallbackAdapter))
         {
             return await PauseWithResultAsync(budgetTrip.Reason, cancellationToken);
         }
 
         await PersistAndLogAsync(
-            new RelayLogEvent(DateTimeOffset.Now, "downgrade.started", repairContext.SourceSide, $"Retrying repair for turn {repairContext.TurnNumber} through bounded fallback because of {budgetTrip.Signal}.", repairContext.RepairPrompt),
+            new RelayLogEvent(DateTimeOffset.Now, "downgrade.started", repairContext.SourceRole, $"Retrying repair for turn {repairContext.TurnNumber} through bounded fallback because of {budgetTrip.Signal}.", repairContext.RepairPrompt),
             cancellationToken);
 
         RemoveActiveSessionHandle();
@@ -1492,7 +1491,7 @@ public sealed class RelayBroker
         var fallbackContext = new RelayRepairContext(
             repairContext.SessionId,
             repairContext.TurnNumber,
-            repairContext.SourceSide,
+            repairContext.SourceRole,
             repairContext.OriginalPrompt,
             repairContext.OriginalOutput,
             repairContext.RepairPrompt,
@@ -1502,7 +1501,7 @@ public sealed class RelayBroker
         try
         {
             fallbackResult = await RunWithTurnTimeoutAsync(
-                repairContext.SourceSide,
+                repairContext.SourceRole,
                 "bounded fallback repair",
                 token => fallbackAdapter.RunRepairAsync(fallbackContext, token),
                 cancellationToken);
@@ -1518,13 +1517,13 @@ public sealed class RelayBroker
 
         CaptureSessionHandle(fallbackResult.SessionHandle);
         var fallbackBudgetTrip = await CaptureFallbackUsageAsync(
-            repairContext.SourceSide,
+            repairContext.SourceRole,
             fallbackResult,
             cancellationToken);
-        var reviewPendingApproval = await LogObservedActionsAsync(repairContext.SourceSide, fallbackResult.ObservedActions, cancellationToken);
+        var reviewPendingApproval = await LogObservedActionsAsync(repairContext.SourceRole, fallbackResult.ObservedActions, cancellationToken);
         if (TryGetOutstandingApprovalRequest(fallbackResult.ObservedActions, out var fallbackRepairApprovalRequest))
         {
-            return await AwaitApprovalAsync(repairContext.SourceSide, fallbackRepairApprovalRequest, cancellationToken);
+            return await AwaitApprovalAsync(repairContext.SourceRole, fallbackRepairApprovalRequest, cancellationToken);
         }
         if (reviewPendingApproval is not null)
         {
@@ -1535,9 +1534,9 @@ public sealed class RelayBroker
                 $"Review required for {reviewPendingApproval.Title}.",
                 State);
         }
-        await LogDiagnosticsAsync(repairContext.SourceSide, fallbackResult.Diagnostics, cancellationToken);
+        await LogDiagnosticsAsync(repairContext.SourceRole, fallbackResult.Diagnostics, cancellationToken);
         await PersistAndLogAsync(
-            new RelayLogEvent(DateTimeOffset.Now, "downgrade.completed", repairContext.SourceSide, $"Bounded fallback repair completed for turn {repairContext.TurnNumber}.", fallbackResult.Output),
+            new RelayLogEvent(DateTimeOffset.Now, "downgrade.completed", repairContext.SourceRole, $"Bounded fallback repair completed for turn {repairContext.TurnNumber}.", fallbackResult.Output),
             cancellationToken);
 
         if (fallbackBudgetTrip is not null)
@@ -1558,7 +1557,7 @@ public sealed class RelayBroker
     }
 
     private async Task<BudgetTrip?> CaptureFallbackUsageAsync(
-        RelaySide side,
+        string role,
         RelayAdapterResult result,
         CancellationToken cancellationToken)
     {
@@ -1569,7 +1568,7 @@ public sealed class RelayBroker
                 new RelayLogEvent(
                     DateTimeOffset.Now,
                     "downgrade.usage_unknown",
-                    side,
+                    role,
                     "Bounded fallback completed without usage metrics. Actual token spend for the retry is untracked."),
                 cancellationToken);
             return null;
@@ -1579,13 +1578,13 @@ public sealed class RelayBroker
             new RelayLogEvent(
                 DateTimeOffset.Now,
                 "downgrade.usage_captured",
-                side,
+                role,
                 "Bounded fallback returned usage metrics. Retry spend has been added to cumulative broker totals.",
                 usage.RawJson),
             cancellationToken);
 
         return await CaptureUsageAsync(
-            side,
+            role,
             usage,
             cancellationToken,
             isFallback: true,
@@ -1595,13 +1594,13 @@ public sealed class RelayBroker
 
     private void RemoveActiveSessionHandle()
     {
-        if (State.NativeSessionHandles.TryGetValue(State.ActiveSide.ToString(), out var existingHandle) &&
+        if (State.NativeSessionHandles.TryGetValue(State.ActiveAgent.ToString(), out var existingHandle) &&
             !string.IsNullOrWhiteSpace(existingHandle))
         {
             State.LastCumulativeByHandle.Remove(existingHandle);
         }
 
-        State.NativeSessionHandles.Remove(State.ActiveSide.ToString());
+        State.NativeSessionHandles.Remove(State.ActiveAgent.ToString());
     }
 
     private int PruneDeadHandleBaselines()
@@ -1662,7 +1661,7 @@ public sealed class RelayBroker
 
         var segmentNumber = State.RotationCount + 1;
         var sessionId = State.SessionId;
-        var activeSide = State.ActiveSide;
+        var activeSide = State.ActiveAgent;
         var fields = new CodexClaudeRelay.Core.Runtime.RollingSummaryFields(
             sessionId,
             segmentNumber,
@@ -1741,7 +1740,7 @@ public sealed class RelayBroker
         $"JobObject.JobMemoryLimitBytes={_options.JobObject.JobMemoryLimitBytes}";
 
     private async Task<T> RunWithTurnTimeoutAsync<T>(
-        RelaySide side,
+        string role,
         string phase,
         Func<CancellationToken, Task<T>> operation,
         CancellationToken cancellationToken)
@@ -1760,9 +1759,9 @@ public sealed class RelayBroker
         }
         catch (OperationCanceledException ex) when (ex.CancellationToken == linkedCts.Token && !cancellationToken.IsCancellationRequested)
         {
-            var message = $"Per-turn timeout exceeded after {_options.PerTurnTimeout:mm\\:ss} during {phase} on {side}.";
+            var message = $"Per-turn timeout exceeded after {_options.PerTurnTimeout:mm\\:ss} during {phase} on {role}.";
             await PersistAndLogAsync(
-                new RelayLogEvent(DateTimeOffset.Now, "turn.timeout", side, message),
+                new RelayLogEvent(DateTimeOffset.Now, "turn.timeout", role, message),
                 cancellationToken);
             throw new RelayTurnTimeoutException(message);
         }

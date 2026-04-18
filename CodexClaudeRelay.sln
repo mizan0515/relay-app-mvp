@@ -7,10 +7,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CodexClaudeRelay.Core", "Co
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CodexClaudeRelay.Desktop", "CodexClaudeRelay.Desktop\CodexClaudeRelay.Desktop.csproj", "{679C38A6-D800-4542-A38B-6739E4BC22D5}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CodexClaudeRelay.CodexProtocol.Spike", "CodexClaudeRelay.CodexProtocol.Spike\CodexClaudeRelay.CodexProtocol.Spike.csproj", "{AA94AF36-36E4-4A15-A19D-EF181265F550}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CodexClaudeRelay.CodexProtocol", "CodexClaudeRelay.CodexProtocol\CodexClaudeRelay.CodexProtocol.csproj", "{767A769D-C590-4ED5-BC69-475A30F8C480}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -45,30 +41,6 @@ Global
 		{679C38A6-D800-4542-A38B-6739E4BC22D5}.Release|x64.Build.0 = Release|Any CPU
 		{679C38A6-D800-4542-A38B-6739E4BC22D5}.Release|x86.ActiveCfg = Release|Any CPU
 		{679C38A6-D800-4542-A38B-6739E4BC22D5}.Release|x86.Build.0 = Release|Any CPU
-		{AA94AF36-36E4-4A15-A19D-EF181265F550}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{AA94AF36-36E4-4A15-A19D-EF181265F550}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{AA94AF36-36E4-4A15-A19D-EF181265F550}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{AA94AF36-36E4-4A15-A19D-EF181265F550}.Debug|x64.Build.0 = Debug|Any CPU
-		{AA94AF36-36E4-4A15-A19D-EF181265F550}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{AA94AF36-36E4-4A15-A19D-EF181265F550}.Debug|x86.Build.0 = Debug|Any CPU
-		{AA94AF36-36E4-4A15-A19D-EF181265F550}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{AA94AF36-36E4-4A15-A19D-EF181265F550}.Release|Any CPU.Build.0 = Release|Any CPU
-		{AA94AF36-36E4-4A15-A19D-EF181265F550}.Release|x64.ActiveCfg = Release|Any CPU
-		{AA94AF36-36E4-4A15-A19D-EF181265F550}.Release|x64.Build.0 = Release|Any CPU
-		{AA94AF36-36E4-4A15-A19D-EF181265F550}.Release|x86.ActiveCfg = Release|Any CPU
-		{AA94AF36-36E4-4A15-A19D-EF181265F550}.Release|x86.Build.0 = Release|Any CPU
-		{767A769D-C590-4ED5-BC69-475A30F8C480}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{767A769D-C590-4ED5-BC69-475A30F8C480}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{767A769D-C590-4ED5-BC69-475A30F8C480}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{767A769D-C590-4ED5-BC69-475A30F8C480}.Debug|x64.Build.0 = Debug|Any CPU
-		{767A769D-C590-4ED5-BC69-475A30F8C480}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{767A769D-C590-4ED5-BC69-475A30F8C480}.Debug|x86.Build.0 = Debug|Any CPU
-		{767A769D-C590-4ED5-BC69-475A30F8C480}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{767A769D-C590-4ED5-BC69-475A30F8C480}.Release|Any CPU.Build.0 = Release|Any CPU
-		{767A769D-C590-4ED5-BC69-475A30F8C480}.Release|x64.ActiveCfg = Release|Any CPU
-		{767A769D-C590-4ED5-BC69-475A30F8C480}.Release|x64.Build.0 = Release|Any CPU
-		{767A769D-C590-4ED5-BC69-475A30F8C480}.Release|x86.ActiveCfg = Release|Any CPU
-		{767A769D-C590-4ED5-BC69-475A30F8C480}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

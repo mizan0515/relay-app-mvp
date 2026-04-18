@@ -11,9 +11,8 @@ public static class RelayPromptBuilder
 
     public static string BuildTurnPrompt(RelayTurnContext context)
     {
-        var target = GetPeer(context.SourceSide);
-        var sourceValue = ToProtocolValue(context.SourceSide);
-        var targetValue = ToProtocolValue(target);
+        var sourceValue = context.SourceRole;
+        var targetValue = AgentRole.Peer(context.SourceRole);
         var carryForwardBlock = string.IsNullOrWhiteSpace(context.CarryForward)
             ? string.Empty
             : context.CarryForward + Environment.NewLine + Environment.NewLine;
@@ -78,9 +77,8 @@ public static class RelayPromptBuilder
 
     public static string BuildRepairPrompt(RelayRepairContext context)
     {
-        var target = GetPeer(context.SourceSide);
-        var sourceValue = ToProtocolValue(context.SourceSide);
-        var targetValue = ToProtocolValue(target);
+        var sourceValue = context.SourceRole;
+        var targetValue = AgentRole.Peer(context.SourceRole);
         var builder = new StringBuilder();
         builder.AppendLine("Your previous reply did not contain a valid bounded handoff block.");
         builder.AppendLine("This is a strict repair turn.");
@@ -108,9 +106,8 @@ public static class RelayPromptBuilder
 
     public static string BuildInteractiveTurnPrompt(RelayTurnContext context)
     {
-        var target = GetPeer(context.SourceSide);
-        var sourceValue = ToProtocolValue(context.SourceSide);
-        var targetValue = ToProtocolValue(target);
+        var sourceValue = context.SourceRole;
+        var targetValue = AgentRole.Peer(context.SourceRole);
 
         return $$"""
         This is an interactive relay transport turn.
@@ -148,9 +145,8 @@ public static class RelayPromptBuilder
 
     public static string BuildInteractiveRepairPrompt(RelayRepairContext context)
     {
-        var target = GetPeer(context.SourceSide);
-        var sourceValue = ToProtocolValue(context.SourceSide);
-        var targetValue = ToProtocolValue(target);
+        var sourceValue = context.SourceRole;
+        var targetValue = AgentRole.Peer(context.SourceRole);
 
         return $$"""
         Your previous interactive reply did not end with a valid relay handoff.
@@ -188,7 +184,4 @@ public static class RelayPromptBuilder
         """;
     }
 
-    private static RelaySide GetPeer(RelaySide side) => side == RelaySide.Codex ? RelaySide.Claude : RelaySide.Codex;
-
-    private static string ToProtocolValue(RelaySide side) => side.ToString().ToLowerInvariant();
 }

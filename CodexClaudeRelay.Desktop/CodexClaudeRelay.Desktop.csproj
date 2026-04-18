@@ -2,7 +2,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\CodexClaudeRelay.Core\CodexClaudeRelay.Core.csproj" />
-    <ProjectReference Include="..\CodexClaudeRelay.CodexProtocol\CodexClaudeRelay.CodexProtocol.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

@@ -12,7 +12,6 @@ using CodexClaudeRelay.Core.Policy;
 using CodexClaudeRelay.Core.Persistence;
 using CodexClaudeRelay.Core.Protocol;
 using CodexClaudeRelay.Desktop.Adapters;
-using CodexClaudeRelay.Desktop.Interactive;
 
 namespace CodexClaudeRelay.Desktop;
 
@@ -20,13 +19,13 @@ public partial class MainWindow : Window
 {
     private static readonly JsonSerializerOptions DisplayJsonOptions = HandoffJson.CreateSerializerOptions(writeIndented: true);
     private const string SmokeTestPrompt =
-        "Run a relay transport smoke test only. Do not do repository work. Emit a minimal dad_handoff JSON object that tells the other side to acknowledge the smoke test and return one more minimal dad_handoff JSON object.";
+        "Run a relay transport smoke test only. Do not do repository work. Emit a minimal dad_handoff JSON object that tells the other role to acknowledge the smoke test and return one more minimal dad_handoff JSON object.";
 
     private readonly string _appDataDirectory;
     private readonly List<IAsyncDisposable> _ownedDisposables = [];
     private RelayBrokerOptions _brokerOptions = new();
     private RelayBroker? _broker;
-    private IReadOnlyDictionary<RelaySide, AdapterStatus> _latestAdapterStatuses = new Dictionary<RelaySide, AdapterStatus>();
+    private IReadOnlyDictionary<string, AdapterStatus> _latestAdapterStatuses = new Dictionary<string, AdapterStatus>(StringComparer.Ordinal);
     private string _latestSmokeTestReport = "No smoke test has run yet.";
     private string _optionsLoadDiagnostic = "Built-in defaults active.";
     private bool _latestSmokeTestSucceeded;
@@ -143,7 +142,7 @@ public partial class MainWindow : Window
                 ? "Read PROJECT-RULES.md first. Start the relay session."
                 : InitialPromptTextBox.Text.Trim();
 
-            await _broker!.StartSessionAsync(sessionId, RelaySide.Codex, firstPrompt, CancellationToken.None);
+            await _broker!.StartSessionAsync(sessionId, AgentRole.Codex, firstPrompt, CancellationToken.None);
         });
     }
 
@@ -183,13 +182,13 @@ public partial class MainWindow : Window
                 : SessionIdTextBox.Text.Trim();
             var sessionId = $"{baseSessionId}-smoke-{DateTime.Now:yyyyMMdd-HHmmss}";
 
-            await _broker!.StartSessionAsync(sessionId, RelaySide.Codex, SmokeTestPrompt, CancellationToken.None);
+            await _broker!.StartSessionAsync(sessionId, AgentRole.Codex, SmokeTestPrompt, CancellationToken.None);
 
             for (var i = 0; i < 2; i++)
             {
                 var turnNumber = i + 1;
-                SetBusyState(true, $"Smoke test running turn {turnNumber} of 2 on {_broker.State.ActiveSide}...");
-                StatusMessageTextBlock.Text = $"Smoke test running turn {turnNumber} of 2 on {_broker.State.ActiveSide}...";
+                SetBusyState(true, $"Smoke test running turn {turnNumber} of 2 on {_broker.State.ActiveAgent}...");
+                StatusMessageTextBlock.Text = $"Smoke test running turn {turnNumber} of 2 on {_broker.State.ActiveAgent}...";
                 RefreshUi();
                 await YieldToUiAsync();
                 var result = await _broker.AdvanceAsync(CancellationToken.None);
@@ -275,11 +274,11 @@ public partial class MainWindow : Window
                 }
 
                 SetBusyState(true, turns == 1
-                    ? $"Advancing turn {_broker.State.CurrentTurn} on {_broker.State.ActiveSide}..."
-                    : $"Advancing step {i + 1} of {turns} on {_broker.State.ActiveSide}...");
+                    ? $"Advancing turn {_broker.State.CurrentTurn} on {_broker.State.ActiveAgent}..."
+                    : $"Advancing step {i + 1} of {turns} on {_broker.State.ActiveAgent}...");
                 StatusMessageTextBlock.Text = turns == 1
-                    ? $"Advancing turn {_broker.State.CurrentTurn} on {_broker.State.ActiveSide}..."
-                    : $"Advancing step {i + 1} of {turns} on {_broker.State.ActiveSide}...";
+                    ? $"Advancing turn {_broker.State.CurrentTurn} on {_broker.State.ActiveAgent}..."
+                    : $"Advancing step {i + 1} of {turns} on {_broker.State.ActiveAgent}...";
                 RefreshUi();
                 await YieldToUiAsync();
                 var result = await _broker.AdvanceAsync(CancellationToken.None);
@@ -345,11 +344,11 @@ public partial class MainWindow : Window
         StateSummaryTextBlock.Text =
             $"Runtime: {GetRuntimeModeLabel()}{Environment.NewLine}" +
             $"Auto-approve all approvals: {(IsAutoApproveAllRequestsEnabled() ? "enabled" : "disabled")}{Environment.NewLine}" +
-            $"Codex approval path: {GetApprovalPathSummary(RelaySide.Codex)}{Environment.NewLine}" +
-            $"Claude approval path: {GetApprovalPathSummary(RelaySide.Claude)}{Environment.NewLine}" +
+            $"Codex approval path: {GetApprovalPathSummary(AgentRole.Codex)}{Environment.NewLine}" +
+            $"Claude approval path: {GetApprovalPathSummary(AgentRole.Claude)}{Environment.NewLine}" +
             $"Session: {state.SessionId}{Environment.NewLine}" +
             $"Status: {state.Status}{Environment.NewLine}" +
-            $"Active side: {state.ActiveSide}{Environment.NewLine}" +
+            $"Active role: {state.ActiveAgent}{Environment.NewLine}" +
             $"Current turn: {state.CurrentTurn}{Environment.NewLine}" +
             $"Repair attempts: {state.RepairAttempts}{Environment.NewLine}" +
             $"Session age: {(DateTimeOffset.Now - state.SessionStartedAt):mm\\:ss}{Environment.NewLine}" +
@@ -363,12 +362,12 @@ public partial class MainWindow : Window
             $"Codex est. cost: ${state.TotalCostCodexUsd:F4} (local rate card){Environment.NewLine}" +
             $"Claude cost ceiling: {FormatClaudeCostCeiling(state, _broker.Options)}{Environment.NewLine}" +
             $"Options: {_optionsLoadDiagnostic}{Environment.NewLine}" +
-            $"Claude low-cache turns: {GetLowCacheTurns(state, RelaySide.Claude)}{Environment.NewLine}" +
+            $"Claude low-cache turns: {GetLowCacheTurns(state, AgentRole.Claude)}{Environment.NewLine}" +
             $"Last budget signal: {state.LastBudgetSignal ?? "(none)"}{Environment.NewLine}" +
-            $"Claude usage: {FormatUsage(state, RelaySide.Claude)}{Environment.NewLine}" +
-            $"Codex usage: {FormatUsage(state, RelaySide.Codex)}{Environment.NewLine}" +
-            $"Codex handle: {GetSessionHandle(state, RelaySide.Codex)}{Environment.NewLine}" +
-            $"Claude handle: {GetSessionHandle(state, RelaySide.Claude)}{Environment.NewLine}" +
+            $"Claude usage: {FormatUsage(state, AgentRole.Claude)}{Environment.NewLine}" +
+            $"Codex usage: {FormatUsage(state, AgentRole.Codex)}{Environment.NewLine}" +
+            $"Codex handle: {GetSessionHandle(state, AgentRole.Codex)}{Environment.NewLine}" +
+            $"Claude handle: {GetSessionHandle(state, AgentRole.Claude)}{Environment.NewLine}" +
             $"Pending prompt: {Shorten(state.PendingPrompt)}{Environment.NewLine}" +
             $"Session approval rules: {state.SessionApprovalRules.Count}{Environment.NewLine}" +
             $"Approval queue entries: {state.ApprovalQueue.Count}{Environment.NewLine}" +
@@ -429,7 +428,7 @@ public partial class MainWindow : Window
         if (_broker is null)
         {
             AdapterStatusTextBlock.Text = "Broker not initialized.";
-            _latestAdapterStatuses = new Dictionary<RelaySide, AdapterStatus>();
+            _latestAdapterStatuses = new Dictionary<string, AdapterStatus>(StringComparer.Ordinal);
             ApplyVisualStates();
             return;
         }
@@ -441,7 +440,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            _latestAdapterStatuses = new Dictionary<RelaySide, AdapterStatus>();
+            _latestAdapterStatuses = new Dictionary<string, AdapterStatus>(StringComparer.Ordinal);
             AdapterStatusTextBlock.Text = ex.Message;
             ApplyVisualStates();
         }
@@ -457,16 +456,16 @@ public partial class MainWindow : Window
         return text.Length <= 120 ? text : $"{text[..120]}...";
     }
 
-    private static string GetSessionHandle(RelaySessionState state, RelaySide side)
+    private static string GetSessionHandle(RelaySessionState state, string role)
     {
-        return state.NativeSessionHandles.TryGetValue(side.ToString(), out var handle)
+        return state.NativeSessionHandles.TryGetValue(role.ToString(), out var handle)
             ? handle
             : "(none)";
     }
 
-    private static string FormatUsage(RelaySessionState state, RelaySide side)
+    private static string FormatUsage(RelaySessionState state, string role)
     {
-        if (!state.LastUsageBySide.TryGetValue(side.ToString(), out var usage))
+        if (!state.LastUsageBySide.TryGetValue(role.ToString(), out var usage))
         {
             return "(none)";
         }
@@ -484,7 +483,7 @@ public partial class MainWindow : Window
             return "(none)";
         }
 
-        return $"{pendingApproval.Side} | {pendingApproval.Title} | {pendingApproval.Category} | risk={pendingApproval.RiskLevel} | {Shorten(pendingApproval.Message)}";
+        return $"{pendingApproval.Role} | {pendingApproval.Title} | {pendingApproval.Category} | risk={pendingApproval.RiskLevel} | {Shorten(pendingApproval.Message)}";
     }
 
     private static string FormatClaudeCostCeiling(RelaySessionState state, RelayBrokerOptions options)
@@ -494,7 +493,7 @@ public partial class MainWindow : Window
             return "(disabled)";
         }
 
-        if (!state.LastUsageBySide.TryGetValue(RelaySide.Claude.ToString(), out var usage) ||
+        if (!state.LastUsageBySide.TryGetValue(AgentRole.Claude.ToString(), out var usage) ||
             string.IsNullOrWhiteSpace(usage.AuthMethod))
         {
             return $"${options.MaxClaudeCostUsd.Value:F2} (awaiting auth signal)";
@@ -505,12 +504,12 @@ public partial class MainWindow : Window
             : $"${options.MaxClaudeCostUsd.Value:F2} (inactive; auth not api-key: {usage.AuthMethod})";
     }
 
-    private static int GetLowCacheTurns(RelaySessionState state, RelaySide side) =>
-        state.ConsecutiveLowCacheTurnsBySide.TryGetValue(side.ToString(), out var count)
+    private static int GetLowCacheTurns(RelaySessionState state, string role) =>
+        state.ConsecutiveLowCacheTurnsBySide.TryGetValue(role.ToString(), out var count)
             ? count
             : 0;
 
-    private void SetAdapterStatuses(IReadOnlyDictionary<RelaySide, AdapterStatus> statuses)
+    private void SetAdapterStatuses(IReadOnlyDictionary<string, AdapterStatus> statuses)
     {
         _latestAdapterStatuses = statuses;
         AdapterStatusTextBlock.Text = string.Join(
@@ -779,9 +778,9 @@ public partial class MainWindow : Window
                     continue;
                 }
 
-                var side = logEvent.Side?.ToString() ?? "-";
+                var role = logEvent.Role?.ToString() ?? "-";
                 events.Add(
-                    $"{logEvent.Timestamp:HH:mm:ss} | {logEvent.EventType} | {side} | {Shorten(logEvent.Message, 96)}");
+                    $"{logEvent.Timestamp:HH:mm:ss} | {logEvent.EventType} | {role} | {Shorten(logEvent.Message, 96)}");
             }
             catch
             {
@@ -832,7 +831,7 @@ public partial class MainWindow : Window
 
         var latest = events[^1];
         var builder = new System.Text.StringBuilder();
-        builder.AppendLine($"{latest.Timestamp:HH:mm:ss} | {latest.EventType} | {latest.Side?.ToString() ?? "-"}");
+        builder.AppendLine($"{latest.Timestamp:HH:mm:ss} | {latest.EventType} | {latest.Role?.ToString() ?? "-"}");
         builder.AppendLine(latest.Message);
         if (!string.IsNullOrWhiteSpace(latest.Payload))
         {
@@ -849,7 +848,7 @@ public partial class MainWindow : Window
         {
             var builder = new System.Text.StringBuilder();
             builder.Append(CodexClaudeRelay.Core.Policy.ApprovalRiskExplainer.Render(pendingApproval));
-            builder.AppendLine($"{pendingApproval.CreatedAt:HH:mm:ss} | pending | {pendingApproval.Side} | {pendingApproval.Title} | {pendingApproval.Category} | risk={pendingApproval.RiskLevel}");
+            builder.AppendLine($"{pendingApproval.CreatedAt:HH:mm:ss} | pending | {pendingApproval.Role} | {pendingApproval.Title} | {pendingApproval.Category} | risk={pendingApproval.RiskLevel}");
             builder.AppendLine(pendingApproval.Message);
             if (RelayApprovalPolicy.TryResolveSessionDecision(state, pendingApproval, out var savedDecision, out var matchedRule) &&
                 matchedRule is not null)
@@ -972,7 +971,7 @@ public partial class MainWindow : Window
 
         var latest = events[^1];
         var builder = new System.Text.StringBuilder();
-        builder.AppendLine($"{latest.Timestamp:HH:mm:ss} | {latest.EventType} | {latest.Side?.ToString() ?? "-"}");
+        builder.AppendLine($"{latest.Timestamp:HH:mm:ss} | {latest.EventType} | {latest.Role?.ToString() ?? "-"}");
         builder.AppendLine(latest.Message);
         if (!string.IsNullOrWhiteSpace(latest.Payload))
         {
@@ -1015,7 +1014,7 @@ public partial class MainWindow : Window
 
         var latest = events[^1];
         var builder = new System.Text.StringBuilder();
-        builder.AppendLine($"{latest.Timestamp:HH:mm:ss} | {latest.EventType} | {latest.Side?.ToString() ?? "-"}");
+        builder.AppendLine($"{latest.Timestamp:HH:mm:ss} | {latest.EventType} | {latest.Role?.ToString() ?? "-"}");
         builder.AppendLine(latest.Message);
         if (!string.IsNullOrWhiteSpace(latest.Payload))
         {
@@ -1114,7 +1113,7 @@ public partial class MainWindow : Window
             Environment.NewLine,
             advisories
                 .OrderBy(logEvent => logEvent.Timestamp)
-                .Select(logEvent => $"{logEvent.Timestamp:HH:mm:ss} | {logEvent.EventType} | {logEvent.Side?.ToString() ?? "-"} | {Shorten(logEvent.Message, 140)}"));
+                .Select(logEvent => $"{logEvent.Timestamp:HH:mm:ss} | {logEvent.EventType} | {logEvent.Role?.ToString() ?? "-"} | {Shorten(logEvent.Message, 140)}"));
     }
 
     private static string BuildCurrentSessionRiskSummary(
@@ -1297,10 +1296,10 @@ public partial class MainWindow : Window
         RelaySessionState state)
     {
         var recentEvents = BuildRecentEventsSummary(logPath);
-        var codexHandle = state.NativeSessionHandles.TryGetValue(RelaySide.Codex.ToString(), out var codexSessionHandle)
+        var codexHandle = state.NativeSessionHandles.TryGetValue(AgentRole.Codex.ToString(), out var codexSessionHandle)
             ? codexSessionHandle
             : "(none)";
-        var claudeHandle = state.NativeSessionHandles.TryGetValue(RelaySide.Claude.ToString(), out var claudeSessionHandle)
+        var claudeHandle = state.NativeSessionHandles.TryGetValue(AgentRole.Claude.ToString(), out var claudeSessionHandle)
             ? claudeSessionHandle
             : "(none)";
         var lastHandoffSummary = state.LastHandoff is null
@@ -1370,7 +1369,7 @@ public partial class MainWindow : Window
             _livePendingApproval = pendingApproval;
             _pendingApprovalDecisionSource = new TaskCompletionSource<RelayApprovalDecision>(TaskCreationOptions.RunContinuationsAsynchronously);
             decisionSource = _pendingApprovalDecisionSource;
-            StatusMessageTextBlock.Text = $"Approval requested by {pendingApproval.Side}: {pendingApproval.Message}";
+            StatusMessageTextBlock.Text = $"Approval requested by {pendingApproval.Role}: {pendingApproval.Message}";
             RefreshUi();
         });
 
@@ -1683,25 +1682,10 @@ public partial class MainWindow : Window
             : WorkingDirectoryTextBox.Text.Trim();
 
         IEnumerable<IRelayAdapter> adapters;
-        if (GetRuntimeMode() == RelayRuntimeMode.Interactive)
-        {
-            var codexInteractive = new CodexInteractiveAdapter(
-                workingDirectory,
-                HandlePendingApprovalAsync,
-                IsAutoApproveAllRequestsEnabled,
-                jobObjectOptions: _brokerOptions.JobObject);
-            var claudeInteractive = new ClaudeInteractiveAdapter(workingDirectory, jobObjectOptions: _brokerOptions.JobObject);
-            _ownedDisposables.Add(codexInteractive);
-            _ownedDisposables.Add(claudeInteractive);
-            adapters = [codexInteractive, claudeInteractive];
-            var fallbackAdapters = new IRelayAdapter[]
-            {
-                new CodexCliAdapter(workingDirectory, jobObjectOptions: _brokerOptions.JobObject),
-                new ClaudeCliAdapter(workingDirectory, maxBudgetUsd: _brokerOptions.FallbackClaudeBudgetUsd, jobObjectOptions: _brokerOptions.JobObject),
-            };
-            _broker = new RelayBroker(adapters, store, eventWriter, fallbackAdapters, _brokerOptions);
-        }
-        else
+        // DAD-v2 reset: Interactive adapters (Codex/Claude) were coupled to the
+        // deleted CodexProtocol project. The Interactive branch now falls through
+        // to CLI adapters until agent-agnostic interactive transport is rebuilt
+        // post-G4. RelayRuntimeMode.Interactive is preserved for config compat.
         {
             adapters =
             [
@@ -1763,11 +1747,11 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task<IReadOnlyDictionary<RelaySide, AdapterStatus>> GetAdapterStatusesWithTimeoutAsync(CancellationToken cancellationToken)
+    private async Task<IReadOnlyDictionary<string, AdapterStatus>> GetAdapterStatusesWithTimeoutAsync(CancellationToken cancellationToken)
     {
         if (_broker is null)
         {
-            return new Dictionary<RelaySide, AdapterStatus>();
+            return new Dictionary<string, AdapterStatus>(StringComparer.Ordinal);
         }
 
         if (_brokerOptions.PerTurnTimeout <= TimeSpan.Zero)
@@ -1794,17 +1778,17 @@ public partial class MainWindow : Window
             ? RelayRuntimeMode.Interactive
             : RelayRuntimeMode.NonInteractive;
 
-    private string GetApprovalPathSummary(RelaySide side)
+    private string GetApprovalPathSummary(string role)
     {
         if (GetRuntimeMode() != RelayRuntimeMode.Interactive)
         {
             return "CLI-native only (no broker-routed approval)";
         }
 
-        return side switch
+        return role switch
         {
-            RelaySide.Codex => "broker-routed (app-server on-request)",
-            RelaySide.Claude => "audit-only (stream-json; no broker-routed approval)",
+            AgentRole.Codex => "broker-routed (app-server on-request)",
+            AgentRole.Claude => "audit-only (stream-json; no broker-routed approval)",
             _ => "unknown"
         };
     }

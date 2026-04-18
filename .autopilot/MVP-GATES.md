@@ -1,86 +1,95 @@
-# MVP-GATES — codex-claude-relay completion scorecard
+# MVP-GATES — codex-claude-relay DAD-v2 automation scorecard
 
 Gate count: 8
 
-Each gate is an OBSERVABLE completion criterion with inspectable evidence. A gate flips to
-`[x]` only when pointed at a runnable log/file/screenshot. `[~]` = partial/in-progress.
-`[ ]` = not started or regressed.
+Each gate is an OBSERVABLE completion criterion for **automating the DAD-v2
+peer-symmetric dialogue protocol in CLI environments**. A gate flips to `[x]`
+only when pointed at a runnable log / packet file / validator output.
+`[~]` = partial/in-progress. `[ ]` = not started or regressed.
 
 Evidence formats accepted:
-- `logs/*.jsonl` line range with event name (quote ≤3 lines)
-- `auto-logs/<file>` tail reference
-- `.autopilot/qa-evidence/<slug>-<ISO>.json` pointer
-- `drive-destructive-qa.ps1` output snippet
-- UI Automation screenshot path (saved under `.autopilot/qa-evidence/screenshots/`)
+- `Document/dialogue/sessions/{id}/turn-{N}.yaml` packet pointer
+- `Document/dialogue/sessions/{id}/turn-{N}-handoff.md` artifact
+- `logs/*.jsonl` event line (quote ≤3 lines)
+- `tools/Validate-*.ps1` output snippet (PASS/FAIL tail)
 - `dotnet build` exit-code + warning count
+- PR number that introduced the capability
 
-Regression protocol: a `[x]` gate reverts to `[~]` or `[ ]` only with cited evidence
-(commit sha + failing build / failing QA line / new error in logs). Silent reversion is a
-rule break.
+Regression protocol: a `[x]` gate reverts to `[~]` or `[ ]` only with cited
+evidence (commit sha + failing validator / build / missing file). Silent
+reversion is a rule break.
 
 ---
 
-## G1 — Build is green end-to-end
-- [x] `powershell -File .autopilot/project.ps1 test` exits 0 on a clean checkout, zero
-      `error CS*` lines in output. Release config. All four projects compile:
-      `CodexClaudeRelay.Core`, `CodexClaudeRelay.Desktop`, `CodexClaudeRelay.CodexProtocol`,
-      `CodexClaudeRelay.CodexProtocol.Spike`.
-- Evidence: last `dotnet build` log tail (paste ≤10 lines showing "Build succeeded").
+## G1 — Peer-symmetric packet I/O
+- [ ] Broker can read and write `turn-{N}.yaml` conforming to
+      `Document/DAD/PACKET-SCHEMA.md` with fields: `type`, `from`,
+      `contract`, `peer_review`, `my_work`, `handoff`. Must round-trip
+      without loss for both `from: codex` and `from: claude-code`.
+- Evidence: a live turn-1.yaml + turn-2.yaml pair that pass
+  `tools/Validate-DadPacket.ps1` and have symmetric structure.
 
-## G2 — App launches and adapter smoke passes
-- [ ] Release binary launches without exception. "Check Adapters" button produces
-      adapter list with at least Codex CLI reachable. "Smoke Test 2" reports success.
-- Evidence: `auto-logs/<launch-id>.json` showing adapter probe success +
-      `logs/<date>.jsonl` line with `smoke.pass` event.
+## G2 — Handoff artifact generation
+- [ ] When a turn closes with `handoff.closeout_kind: peer_handoff`, the
+      broker saves `turn-{N}-handoff.md` at the path named in
+      `handoff.prompt_artifact`, containing the 7-part DAD prompt
+      (references, state, prev packet, next_task, summary, tail, paste).
+- Evidence: a generated handoff.md file + matching `handoff_written` log line.
 
-## G3 — Session start → advance turn → clean shutdown
-- [ ] Operator types a working directory + initial prompt, clicks Start Session, clicks
-      Advance Once, sees tool activity populate, clicks Stop, app shuts down without
-      orphan process.
-- Evidence: `logs/*.jsonl` showing `session.started`, `turn.completed`, `session.stopped`
-      in order, no `session.orphaned` event.
+## G3 — Checkpoint PASS/FAIL collection
+- [ ] The broker parses `peer_review.checkpoint_results` from a turn packet
+      and emits a `checkpoint.verified` event per result with fields
+      `{checkpoint_id, status, evidence_ref}`. Missing evidence for a
+      non-PASS result blocks the turn from closing.
+- Evidence: logs/*.jsonl showing `checkpoint.verified` events for a real
+  turn, plus a rejection log line when evidence is missing.
 
-## G4 — Approval-first gate on destructive op
-- [x] Running a scenario that triggers a destructive-tier shell command (e.g.
-      `drive-destructive-qa.ps1` scenario 5/6) surfaces the approval UI; Deny blocks the
-      command; Approve Once lets one through without elevating session policy.
-- Evidence: `drive-destructive-qa.ps1` run tail showing deny path + approve-once path,
-      plus UI screenshot of approval panel.
+## G4 — One full peer round-trip automated
+- [ ] Starting from a committed turn-1 (from Codex), the broker routes the
+      handoff to Claude Code (or back to Codex), produces a turn-2 packet,
+      and writes state.json `current_turn = 2`. No manual copy-paste.
+- Evidence: session directory with turn-1/2 packets + handoffs + state.json
+  showing progression, all created within one broker-driven session.
 
-## G5 — Handoff parse + repair loop
-- [~] A malformed handoff output triggers `BuildInteractiveRepairPrompt`; a repaired
-      handoff lands as `handoff.accepted` with `ready=true` and no
-      `previous_invalid_output` field (E-spec-2).
-- Evidence: `logs/*.jsonl` lines `handoff.rejected` → repair prompt → `handoff.accepted`.
+## G5 — recovery_resume protocol
+- [ ] When a turn ends with `closeout_kind: recovery_resume` (context
+      overflow), the broker loads `.prompts/04-session-recovery-resume.md`,
+      injects `open_risks` + empty `prompt_artifact` handling, and the next
+      agent continues without loss of `my_work` state.
+- Evidence: a resume cycle — turn with recovery_resume closeout → successful
+  turn-{N+1} with `my_work.continued_from_resume: true`.
 
-## G6 — Rolling summary written durably (F-impl-1)
-- [x] `RelayBroker.RotateSessionAsync` writes a markdown summary to
-      `%LocalAppData%\CodexClaudeRelayMvp\summaries\{sessionId}-segment-{n}.md` BEFORE per-rotation
-      state reset. `summary.generated` emitted with bytes + cost fields. IO failure emits
-      `summary.failed` and does not crash the broker.
-- Evidence: sample summary file (size + first 20 lines) + matching `summary.generated`
-      log line.
+## G6 — Rolling summary + carry-forward injection
+- [ ] At session rotation (turn/time/token trigger), broker writes a
+      markdown summary and injects Goal/Completed/Pending/Constraints into
+      the next session's first turn prompt under a `## Carry-forward`
+      section. `summary.generated` event carries bytes + path.
+- Evidence: pre-/post-rotation prompt diff showing carry-forward block +
+  matching `summary.generated` log line + file on disk.
 
-## G7 — Carry-forward injected into next turn (F-impl-2 + F-impl-3)
-- [x] `RelaySessionState` populates `Goal`/`Completed`/`Pending`/`Constraints`/
-      `LastHandoffHash` (from `HandoffParser.ComputeCanonicalHash` at
-      `CompleteHandoffAsync`). `RelayPromptBuilder` emits a `## Carry-forward` section
-      into the prompt on the post-rotation turn and emits `summary.loaded`.
-- Evidence: pre-/post-rotation prompt diff showing the carry-forward block + logged
-      `summary.loaded` line.
+## G7 — Consensus convergence closeout
+- [ ] When both peers mark `handoff.ready_for_peer_verification: true` AND
+      `handoff.suggest_done: true` in consecutive turns with matching
+      `checkpoint_results`, the broker seals the session as `converged` in
+      state.json and links it in `Document/dialogue/backlog.json`.
+- Evidence: state.json showing `session_status: converged` + backlog entry
+  with `closed_by_session_id` filled.
 
-## G8 — Rotation live exercise crossing MaxTurnsPerSession (F-live-1)
-- [~] Live run crosses the rotation threshold, carry-forward is visible in the next
-      session's first turn, operator can export diagnostics, no orphan approvals, no
-      `session.lost` event. Destructive-tier ops still gated across the boundary.
-- Evidence: full session jsonl spanning the rotation + diagnostics export zip pointer.
+## G8 — Audit log integrity
+- [ ] Every turn packet I/O, handoff artifact write, and state transition
+      emits a JSONL event with canonical SHA-256 hash. Replay of the same
+      handoff does NOT produce duplicate state transitions (dedup via
+      `AcceptedRelayKeys`). Event log survives process crash.
+- Evidence: logs/*.jsonl tail showing hash-stamped events for a turn +
+  demonstration of dedup (same packet submitted twice → one transition).
 
 ---
 
 ## Flip history
 
-(Append an ISO-timestamped line when a gate flips, with commit sha + evidence pointer.
-Never delete history lines — they are the regression audit trail.)
+(Append an ISO-timestamped line when a gate flips, with commit sha + evidence
+pointer. Never delete history lines — they are the regression audit trail.)
 
-- 2026-04-18 — scaffolded, all gates `[ ]`.
-- 2026-04-18 — G1/G4/G6/G7 → [x], G5/G8 → [~]. Evidence: mvp-gates-evidence.md. Commits: PR #17/#18/#19/#20.
+- 2026-04-18 — scaffolded post-reset; all gates `[ ]`. Previous scorecard
+  (Codex-only G1-G8 from pre-reset state) archived in
+  `archive/codex-broker-phase-f` tag.

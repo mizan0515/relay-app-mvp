@@ -11,10 +11,10 @@ public sealed record HandoffEnvelope
     public int Version { get; init; } = 1;
 
     [JsonPropertyName("source")]
-    public RelaySide Source { get; init; }
+    public string Source { get; init; } = AgentRole.Codex;
 
     [JsonPropertyName("target")]
-    public RelaySide Target { get; init; }
+    public string Target { get; init; } = AgentRole.Claude;
 
     [JsonPropertyName("session_id")]
     public string SessionId { get; init; } = string.Empty;

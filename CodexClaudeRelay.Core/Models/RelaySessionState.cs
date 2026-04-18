@@ -6,7 +6,7 @@ public sealed class RelaySessionState
 
     public RelaySessionStatus Status { get; set; } = RelaySessionStatus.Idle;
 
-    public RelaySide ActiveSide { get; set; } = RelaySide.Codex;
+    public string ActiveAgent { get; set; } = AgentRole.Codex;
 
     public int CurrentTurn { get; set; } = 1;
 

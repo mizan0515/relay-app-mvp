@@ -4,7 +4,6 @@ using CodexClaudeRelay.Core.Adapters;
 using CodexClaudeRelay.Core.Broker;
 using CodexClaudeRelay.Core.Models;
 using CodexClaudeRelay.Core.Policy;
-using CodexClaudeRelay.Core.Pricing;
 using CodexClaudeRelay.Core.Protocol;
 
 namespace CodexClaudeRelay.Desktop.Adapters;
@@ -31,7 +30,7 @@ internal sealed class CodexCliAdapter : IRelayAdapter
         _configuredModel = CodexModelResolver.TryResolveConfiguredModel();
     }
 
-    public RelaySide Side => RelaySide.Codex;
+    public string Role => AgentRole.Codex;
 
     public async Task<AdapterStatus> GetStatusAsync(CancellationToken cancellationToken)
     {
@@ -180,16 +179,13 @@ internal sealed class CodexCliAdapter : IRelayAdapter
                         var parsedUsage = RelayUsageMetrics.FromCodexExecUsage(usageElement);
                         if (parsedUsage is not null)
                         {
-                            var (costUsd, modelRecognized) = CodexPricing.EstimateUsdWithRecognition(parsedUsage, _configuredModel);
-                            var pricingFallbackReason = !modelRecognized
-                                ? string.IsNullOrWhiteSpace(_configuredModel)
-                                    ? "pricing fallback: Codex model not resolved from config.toml; using default rates"
-                                    : $"pricing fallback: model '{_configuredModel}' not in rate card; using default rates"
-                                : null;
+                            // DAD-v2 reset: Codex-specific pricing stripped (peer-symmetric protocol).
+                            // Cost is 0 locally; agents can surface their own usage via telemetry if needed.
+                            var pricingFallbackReason = (string?)null;
                             usage = parsedUsage with
                             {
                                 Model = _configuredModel,
-                                CostUsd = costUsd,
+                                CostUsd = 0.0,
                                 PricingFallbackReason = pricingFallbackReason
                             };
 
@@ -379,8 +375,8 @@ internal sealed class CodexCliAdapter : IRelayAdapter
     private static string Shorten(string text, int maxLength) =>
         text.Length <= maxLength ? text : $"{text[..maxLength]}...";
 
-    private static RelaySide GetPeer(RelaySide side) =>
-        side == RelaySide.Codex ? RelaySide.Claude : RelaySide.Codex;
+    private static string GetPeer(string role) =>
+        role == AgentRole.Codex ? AgentRole.Claude : AgentRole.Codex;
 
     private IEnumerable<string> BuildCommandArguments(IEnumerable<string> args) =>
         _command.PrefixArguments.Concat(args);

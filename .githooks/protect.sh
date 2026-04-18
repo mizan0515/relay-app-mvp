@@ -55,25 +55,21 @@ fi
 
 # These paths must remain in STATE.md protected_paths: at all times.
 REQUIRED_PROTECTED=(
-  "CodexClaudeRelay.sln"
   ".autopilot/PROMPT.md"
   ".autopilot/MVP-GATES.md"
-  ".autopilot/CLEANUP-LOG.md"
-  ".autopilot/CLEANUP-CANDIDATES.md"
   ".autopilot/project.ps1"
   ".autopilot/project.sh"
   ".githooks/"
-  # Dormant defensive guards carried over from the origin template
-  # (dad-v2-system-template). These paths do not exist in this repo today;
-  # listing them here preserves the guardrail so that if they ever reappear
-  # the pre-commit hook already treats them as protected. Do NOT prune.
-  "en/"
-  "ko/"
-  "tools/"
+  # DAD-v2 contract files (live — not dormant). These define the peer
+  # protocol this repo automates. Agents/rules/packet schema MUST stay
+  # protected from self-evolution drift. Do NOT prune.
   "PROJECT-RULES.md"
   "CLAUDE.md"
   "AGENTS.md"
   "DIALOGUE-PROTOCOL.md"
+  "Document/DAD/"
+  ".prompts/"
+  "tools/"
 )
 for p in "${REQUIRED_PROTECTED[@]}"; do
   if ! grep -qE "^[[:space:]]*-[[:space:]]*${p//\//\\/}[[:space:]]*$" "$STATE"; then
@@ -96,7 +92,7 @@ if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
   exit 0
 fi
 
-BLOCKS=(product-directive core-contract boot budget blast-radius halt cleanup-safety mvp-gate exit-contract)
+BLOCKS=(mission core-contract boot budget blast-radius halt mvp-gate exit-contract)
 
 tmp_base=$(mktemp); tmp_head=$(mktemp)
 trap 'rm -f "$tmp_base" "$tmp_head"' EXIT

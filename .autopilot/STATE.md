@@ -2,76 +2,74 @@
 
 root: .
 base: main
-iteration: 35
-status: halted
-active_task: null
-# Last completed: Iter 35 auto-halt — triggered by `3 consecutive upkeep → auto-halt` rule in PROMPT.md Idle-upkeep mode block (iters 33/34/35 all upkeep with empty autopilot-reachable queue). No HALT file written (the IMMUTABLE halt block lists 5 auto-halt conditions that write HALT; 3-consecutive-upkeep is NOT one of them — it's a mutable mode-local rule, so we emit `status: halted` + LAST_HALT_NOTE without creating HALT). Operator resume path: (a) merge `[mvp-gates-scorecard-flip]` PR (flips G1/G4/G6/G7→[x], G5/G8→[~] per mvp-gates-evidence.md); (b) drop `OPERATOR: focus on <task>` sticky into STATE.md; (c) open access to UIA harness / real remote to unblock G5/G8 live halves; (d) re-fire /loop — next boot iter 36 will re-enter mode dispatch cleanly. Smoke last green on main: 34/34 PASS, Release 0/0.
+iteration: 0
+status: reset-in-progress
+active_task:
+  slug: dad-v2-reset-rebuild
+  plan:
+    - "Phase 0: DAD-v2 contract files ported (DONE)"
+    - "Phase 1: IMMUTABLE:mission block + hook rewrite + new MVP-GATES (DONE)"
+    - "Phase 2: delete poison docs + CodexProtocol projects + RelaySide/CodexPricing (DONE)"
+    - "Phase 3: Desktop/ retained for future dual-agent UI (DONE)"
+    - "Phase 4: ADAPT — see .autopilot/PHASE4-PLAN.md (PENDING, build currently broken on reset branch)"
+    - "Phase 5: commit --no-verify → push → PR → land → remove HALT → loop iter 1 → G1"
+  started_iter: 0
+  branch: reset/dad-v2-aligned
+  gate: N/A (pre-gate reset — HALT active)
+
 # active_task schema:
 #   slug: <kebab-case>
 #   plan: [bullet, bullet]
 #   started_iter: N
-#   branch: dev/autopilot-<slug>-<YYYYMMDD>
+#   branch: autopilot/<slug>-<YYYYMMDD>
 #   gate: G<n>  (reference to .autopilot/MVP-GATES.md)
 
 plan_docs:
   - DEV-PROGRESS.md
-  - IMPROVEMENT-PLAN.md
-  - README.md
+  - PROJECT-RULES.md
+  - AGENTS.md
+  - CLAUDE.md
+  - DIALOGUE-PROTOCOL.md
 
 spec_docs:
-  - PHASE-A-SPEC.md
-  - INTERACTIVE-REBUILD-PLAN.md
-  - TESTING-CHECKLIST.md
-  - CLAUDE-APPROVAL-DECISION.md
-  - capability-matrix.md
+  - Document/DAD/PACKET-SCHEMA.md
+  - Document/DAD/STATE-AND-LIFECYCLE.md
+  - Document/DAD/BACKLOG-AND-ADMISSION.md
+  - Document/DAD/VALIDATION-AND-PROMPTS.md
 
 reference_docs:
-  - KNOWN-PITFALLS.md
-  - phase-f-survey.md
-  - git-workflow.md
+  - .prompts/
 
 # Auto-merge refuses if the PR diff touches any of these:
 protected_paths:
-  - CodexClaudeRelay.sln
   - .autopilot/PROMPT.md
   - .autopilot/MVP-GATES.md
-  - .autopilot/CLEANUP-LOG.md
-  - .autopilot/CLEANUP-CANDIDATES.md
   - .autopilot/project.ps1
   - .autopilot/project.sh
   - .githooks/
-  # Dormant defensive guards (origin-template carryover — files do not exist here
-  # today, but if they ever reappear the guard activates automatically. Do NOT
-  # prune these just because the paths are missing from this repo).
-  - en/
-  - ko/
-  - tools/
+  # DAD-v2 contract files — peer protocol definition, drift-locked.
   - PROJECT-RULES.md
   - CLAUDE.md
   - AGENTS.md
   - DIALOGUE-PROTOCOL.md
+  - Document/DAD/
+  - .prompts/
+  - tools/
 
 open_questions:
-  - "Does the rotation-with-carry-forward exercise (F-live-1) meaningfully preserve Goal/Completed/Pending across the split, or do the fields end up empty in practice?"
-  - "Can the approval UI communicate destructive-tier risk without operator reading the full command, or is the risk summary still too abstract?"
-  - "Is Claude's audit-only stance still the right call given the handoff-parser maturity curve, or should we revisit per CLAUDE-APPROVAL-DECISION.md?"
+  - "Which existing session packet format (YAML vs relay's JSON envelope) should the broker's primary I/O use when they collide?"
+  - "Does the approval-UI surface need dual-agent view redesign, or can the existing single-pane approach serve both peers with role labels?"
+  - "Is there a production DAD-v2 session artifact to replay against, or must we synthesize fixtures for the first gate?"
 
 # MVP gates: canonical checklist at .autopilot/MVP-GATES.md. STATE tracks only tally.
 mvp_gates: 0/8
 mvp_last_advanced_iter: 0
 
-# OPERATOR overrides — any line starting with `OPERATOR:` wins over PROMPT.md.
+# OPERATOR overrides — any line starting with `OPERATOR:` wins over mutable rules
+# but NEVER over IMMUTABLE:mission.
 #   OPERATOR: halt
-#   OPERATOR: halt evolution
 #   OPERATOR: focus on <task>
-#   OPERATOR: allow evolution <rationale>
-#   OPERATOR: allow push to main for <task>    (single use, delete after use)
-#   OPERATOR: require human review             (disables auto-merge globally)
-#   OPERATOR: run cleanup                      (promotes Cleanup mode this iter; one-shot)
-#   OPERATOR: mvp-rescope <rationale>          (allow gate count to decrease; one-shot)
-#   OPERATOR: post-mvp <direction>             (unblocks after mvp-complete halt; sticky)
-#   OPERATOR: approve cleanup <candidate-date> (authorizes Phase B bulk-delete; one-shot)
-#
-# One-shot overrides are CONSUMED by the loop at the end of the iteration that
-# acts on them — the exit step deletes the line from this file. Sticky
-# overrides persist until the operator removes them manually.
+#   OPERATOR: run cleanup
+#   OPERATOR: mvp-rescope <rationale>
+#   OPERATOR: post-mvp <direction>
+#   OPERATOR: require human review

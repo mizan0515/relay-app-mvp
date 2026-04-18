@@ -11,8 +11,8 @@ public static partial class HandoffParser
     public static bool TryParseWithFallback(
         string text,
         string originalPrompt,
-        RelaySide expectedSource,
-        RelaySide expectedTarget,
+        string expectedSource,
+        string expectedTarget,
         string expectedSessionId,
         int expectedTurn,
         out HandoffEnvelope? handoff,
@@ -59,8 +59,8 @@ public static partial class HandoffParser
     private static bool TryNormalizeFromPlainText(
         string text,
         string originalPrompt,
-        RelaySide expectedSource,
-        RelaySide expectedTarget,
+        string expectedSource,
+        string expectedTarget,
         string expectedSessionId,
         int expectedTurn,
         out HandoffEnvelope? handoff,
@@ -225,8 +225,8 @@ public static partial class HandoffParser
 
     private static bool TryNormalize(
         string candidate,
-        RelaySide expectedSource,
-        RelaySide expectedTarget,
+        string expectedSource,
+        string expectedTarget,
         string expectedSessionId,
         int expectedTurn,
         out HandoffEnvelope? handoff,
@@ -247,8 +247,8 @@ public static partial class HandoffParser
             }
 
             var root = document.RootElement;
-            var source = TryGetRelaySide(root, "source", out var parsedSource) ? parsedSource : expectedSource;
-            var target = TryGetRelaySide(root, "target", out var parsedTarget) ? parsedTarget : expectedTarget;
+            var source = TryGetAgentRole(root, "source", out var parsedSource) ? parsedSource! : expectedSource;
+            var target = TryGetAgentRole(root, "target", out var parsedTarget) ? parsedTarget! : expectedTarget;
             var ready = TryGetBoolean(root, "ready", out var readyValue)
                 ? readyValue
                 : InferReady(root);
@@ -319,9 +319,9 @@ public static partial class HandoffParser
         }
     }
 
-    private static bool TryGetRelaySide(JsonElement root, string propertyName, out RelaySide side)
+    private static bool TryGetAgentRole(JsonElement root, string propertyName, out string? role)
     {
-        side = default;
+        role = null;
         var value = GetString(root, propertyName);
         if (string.IsNullOrWhiteSpace(value))
         {
@@ -330,13 +330,14 @@ public static partial class HandoffParser
 
         if (string.Equals(value, "codex", StringComparison.OrdinalIgnoreCase))
         {
-            side = RelaySide.Codex;
+            role = AgentRole.Codex;
             return true;
         }
 
-        if (string.Equals(value, "claude", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(value, "claude", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(value, "claude-code", StringComparison.OrdinalIgnoreCase))
         {
-            side = RelaySide.Claude;
+            role = AgentRole.Claude;
             return true;
         }
 
@@ -472,8 +473,8 @@ public static partial class HandoffParser
         return false;
     }
 
-    private static string BuildFallbackPrompt(RelaySide expectedSource, RelaySide expectedTarget) =>
-        $"Acknowledge the relay smoke test from {expectedSource.ToString().ToLowerInvariant()} while acting as {expectedTarget.ToString().ToLowerInvariant()}, then return one valid dad_handoff JSON object targeting {expectedSource.ToString().ToLowerInvariant()}.";
+    private static string BuildFallbackPrompt(string expectedSource, string expectedTarget) =>
+        $"Acknowledge the relay smoke test from {expectedSource} while acting as {expectedTarget}, then return one valid dad_handoff JSON object targeting {expectedSource}.";
 
     private static bool LooksLikeSmokeTestPrompt(string originalPrompt) =>
         originalPrompt.Contains("relay transport smoke test", StringComparison.OrdinalIgnoreCase) ||

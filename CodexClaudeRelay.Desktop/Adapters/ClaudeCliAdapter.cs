@@ -31,7 +31,7 @@ internal sealed class ClaudeCliAdapter : IRelayAdapter
         _maxBudgetUsd = maxBudgetUsd;
     }
 
-    public RelaySide Side => RelaySide.Claude;
+    public string Role => AgentRole.Claude;
 
     public async Task<AdapterStatus> GetStatusAsync(CancellationToken cancellationToken)
     {

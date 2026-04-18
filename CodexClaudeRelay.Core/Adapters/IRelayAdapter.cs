@@ -4,7 +4,7 @@ namespace CodexClaudeRelay.Core.Adapters;
 
 public interface IRelayAdapter
 {
-    RelaySide Side { get; }
+    string Role { get; }
 
     Task<AdapterStatus> GetStatusAsync(CancellationToken cancellationToken);
 

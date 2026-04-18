@@ -19,7 +19,7 @@ public static class HandoffJson
         return options;
     }
 
-    public static string BuildSchema(RelaySide source, RelaySide target, string sessionId, int turnNumber)
+    public static string BuildSchema(string source, string target, string sessionId, int turnNumber)
     {
         var schema = new Dictionary<string, object?>
         {
@@ -28,8 +28,8 @@ public static class HandoffJson
             {
                 ["type"] = new Dictionary<string, object?> { ["type"] = "string", ["const"] = "dad_handoff" },
                 ["version"] = new Dictionary<string, object?> { ["type"] = "integer", ["const"] = 1 },
-                ["source"] = new Dictionary<string, object?> { ["type"] = "string", ["const"] = source.ToString().ToLowerInvariant() },
-                ["target"] = new Dictionary<string, object?> { ["type"] = "string", ["const"] = target.ToString().ToLowerInvariant() },
+                ["source"] = new Dictionary<string, object?> { ["type"] = "string", ["const"] = source },
+                ["target"] = new Dictionary<string, object?> { ["type"] = "string", ["const"] = target },
                 ["session_id"] = new Dictionary<string, object?> { ["type"] = "string", ["const"] = sessionId },
                 ["turn"] = new Dictionary<string, object?> { ["type"] = "integer", ["const"] = turnNumber },
                 ["ready"] = new Dictionary<string, object?> { ["type"] = "boolean" },

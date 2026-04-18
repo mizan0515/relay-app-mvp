@@ -2,7 +2,7 @@ namespace CodexClaudeRelay.Core.Models;
 
 public sealed record RelayPendingApproval(
     string Id,
-    RelaySide Side,
+    string Role,
     string Category,
     string Title,
     string Message,

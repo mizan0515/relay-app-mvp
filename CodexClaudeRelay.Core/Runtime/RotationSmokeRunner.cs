@@ -38,7 +38,7 @@ public static class RotationSmokeRunner
         var ctx = new RelayTurnContext(
             SessionId: "smoke-session",
             TurnNumber: 2,
-            SourceSide: RelaySide.Codex,
+            SourceRole: AgentRole.Codex,
             Prompt: "Smoke task — no real work.",
             CarryForward: carryForward);
 
@@ -47,7 +47,7 @@ public static class RotationSmokeRunner
         var repairCtx = new RelayRepairContext(
             SessionId: "smoke-session",
             TurnNumber: 2,
-            SourceSide: RelaySide.Codex,
+            SourceRole: AgentRole.Codex,
             OriginalPrompt: "Smoke task — no real work.",
             OriginalOutput: "...some malformed non-handoff trailing text...",
             RepairPrompt: "(unused — BuildInteractiveRepairPrompt renders its own).");
@@ -73,7 +73,7 @@ public static class RotationSmokeRunner
             RotationReason: "rotation-smoke headless exercise",
             SessionStartedAt: DateTimeOffset.Now.AddMinutes(-5),
             TurnsSinceLastRotation: 42,
-            ActiveSideAtRotation: RelaySide.Codex,
+            ActiveAgentAtRotation: AgentRole.Codex,
             TotalInputTokens: 1234,
             TotalOutputTokens: 567,
             TotalCacheReadInputTokens: 89,

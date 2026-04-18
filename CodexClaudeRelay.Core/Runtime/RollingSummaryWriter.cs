@@ -10,7 +10,7 @@ public sealed record RollingSummaryFields(
     string RotationReason,
     DateTimeOffset SessionStartedAt,
     int TurnsSinceLastRotation,
-    RelaySide ActiveSideAtRotation,
+    string ActiveAgentAtRotation,
     long TotalInputTokens,
     long TotalOutputTokens,
     long TotalCacheReadInputTokens,
@@ -58,7 +58,7 @@ public static class RollingSummaryWriter
             $"- Segment started at: {f.SessionStartedAt:O}{Environment.NewLine}" +
             $"- Rotation reason: {f.RotationReason}{Environment.NewLine}" +
             $"- Turns in this segment: {f.TurnsSinceLastRotation}{Environment.NewLine}" +
-            $"- Active side at rotation: {f.ActiveSideAtRotation}{Environment.NewLine}{Environment.NewLine}" +
+            $"- Active agent at rotation: {f.ActiveAgentAtRotation}{Environment.NewLine}{Environment.NewLine}" +
             $"## Cumulative totals{Environment.NewLine}" +
             $"- input_tokens: {f.TotalInputTokens}{Environment.NewLine}" +
             $"- output_tokens: {f.TotalOutputTokens}{Environment.NewLine}" +

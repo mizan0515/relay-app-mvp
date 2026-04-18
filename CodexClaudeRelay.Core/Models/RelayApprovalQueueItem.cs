@@ -4,7 +4,7 @@ public sealed record RelayApprovalQueueItem(
     string Id,
     string SessionId,
     int Turn,
-    RelaySide Side,
+    string Role,
     string Category,
     string Title,
     string Message,

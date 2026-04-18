@@ -5,7 +5,7 @@ namespace CodexClaudeRelay.Core.Adapters;
 public sealed record RelayRepairContext(
     string SessionId,
     int TurnNumber,
-    RelaySide SourceSide,
+    string SourceRole,
     string OriginalPrompt,
     string OriginalOutput,
     string RepairPrompt,

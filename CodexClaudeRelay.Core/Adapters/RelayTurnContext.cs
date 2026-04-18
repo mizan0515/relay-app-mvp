@@ -5,7 +5,7 @@ namespace CodexClaudeRelay.Core.Adapters;
 public sealed record RelayTurnContext(
     string SessionId,
     int TurnNumber,
-    RelaySide SourceSide,
+    string SourceRole,
     string Prompt,
     string? ExistingSessionHandle = null,
     string? CarryForward = null);
