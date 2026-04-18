@@ -2,10 +2,10 @@
 
 root: .
 base: main
-iteration: 84
+iteration: 85
 status: idle-upkeep
-idle_upkeep_streak: 17  # iter84: R-REVIEW 지속, streak 17
-next_iter_unblock_plan: iter85 — 폴링 지속. 승인 시 즉시 머지 → G1 [x] flip → MVP 8/8.
+idle_upkeep_streak: 18  # iter85: R-REVIEW 지속, streak 18
+next_iter_unblock_plan: iter86 — 폴링 지속. 승인 시 즉시 머지 → G1 [x] flip → MVP 8/8.
 backlog: .autopilot/BACKLOG.md (B1·B2·B3·B4·B5·B6·B7·B9·B12·B13·B13.1·B14·B15 DONE · B11 CLOSED · B10 SPEC-LANDED · active=B8 blocked)
 open_autopilot_prs: [53, 57]
 merged_since_last_iter: []
