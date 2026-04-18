@@ -74,17 +74,13 @@
 - Destructive-tier WPF-driven QA session `destructive-qa-20260417-131500` ran in INTERACTIVE mode on disposable branch `audit/destructive-20260417` of the TaskPulse workspace with `AutoApproveAllRequests=true`. Broker observed `git.add.requested`/`.completed` (exit 0), `git.commit.requested`/`.completed`, `git.push.requested` + `approval.requested` + `approval.queue.enqueued` + `git.push.completed (declined)`. `git add` and `git commit` ran inside Codex's sandbox without routing approvals to the broker; `git push` correctly escalated as `item/commandExecution/requestApproval` and was denied by timeout because `AutoApproveAllRequests` did not auto-resolve the server-originated approval.
 
 ### Next priority
-- F-impl-1: durable rolling-summary file. In `RotateSessionAsync`, before resetting per-rotation state, build a short markdown summary and write it to `%LocalAppData%\CodexClaudeRelayMvp\summaries\{sessionId}-segment-{n}.md`. Emit `summary.generated` (bytes + cost) and `summary.failed` on IO error. Smallest viable F1 + F4 slice.
-- F-impl-2: add `Goal`/`Completed`/`Pending`/`Constraints`/`LastHandoffHash` carry-forward fields to `RelaySessionState`; populate `LastHandoffHash` from `HandoffParser.ComputeCanonicalHash` in `CompleteHandoffAsync`.
-- F-impl-3: extend `RelayPromptBuilder` to inject a `## Carry-forward` section into the next turn's prompt after rotation; emit `summary.loaded`.
-- F-live-1: rotation-with-summary live exercise crossing `MaxTurnsPerSession`.
-- E-spec-2 (non-blocking quality-of-life): tighten `BuildInteractiveRepairPrompt` to explicitly instruct the side to set `ready=true` and omit `previous_invalid_output`, so repaired handoffs land as `handoff.accepted` instead of `session.paused`.
+- Phase F carry-forward impl slices shipped: F-impl-1 rolling-summary write (PR #5, ae0f220), F-impl-2 state fields + `LastHandoffHash` (PR #6, 4391fc5), F-impl-3 prompt injection primitive (PR #7, bd8f60f), F-impl-3b Goal/Pending population from handoff envelope (PR #8, 99a077c), F-impl-3c parts 1+2 `completed`/`constraints` envelope + parser + broker wiring (PRs #9/#10).
+- E-spec-2 interactive repair-prompt tightening shipped (PR #12).
+- F-live-1: rotation-with-carry-forward live exercise crossing `MaxTurnsPerSession`. Execution plan drafted in `phase-f-live-1-plan.md` (PR #11); run itself needs a WPF UI Automation harness (no test csproj in sln today) or an operator-assisted interactive drive.
+- F-live-2: verify PR #12 interactive-repair behavior lands as `handoff.accepted` on first repair turn (Gate G5 live evidence). Same harness dependency as F-live-1.
 - Live `gh pr create` exercise against a real GitHub remote (currently blocked on a real remote).
-- Direct Claude parity pass for the destructive git tier.
+- Direct Claude parity pass for the destructive git tier (requires operator: elevates Claude above audit-tier).
 - Non-blocking: msys/sh.exe pipe-creation failure under Job Object sandbox (iteration 5 finding).
-- Live `gh pr create` destructive-tier exercise (still blocked on a real GitHub remote).
-- Direct Claude parity pass for the destructive git tier.
-- Non-blocking: investigate the Windows msys/sh.exe pipe-creation failure under the Job Object sandbox surfaced in `auto-approve-push-qa-20260417-143000`. Not blocking approval flow; relevant for any git operation that forks an sh.exe child inside the sandbox.
 
 ### Loop status
 - 2026-04-17 Session 1 paused after C3 read-only merge (PR #5). Context budget approaching the agreed threshold; resuming the loop on the next scheduled wake-up.
