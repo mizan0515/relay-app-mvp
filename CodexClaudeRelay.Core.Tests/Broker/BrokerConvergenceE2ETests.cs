@@ -7,6 +7,7 @@ using Xunit;
 
 namespace CodexClaudeRelay.Core.Tests.Broker;
 
+[Collection("BrokerCwdMutating")]
 public class BrokerConvergenceE2ETests
 {
     private sealed class NoopAdapter : IRelayAdapter
