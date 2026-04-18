@@ -20,6 +20,10 @@ public static class TurnPacketAdapter
                 Context = env.Reason,
                 ReadyForPeerVerification = env.Ready,
             },
+            PeerReview = new PeerReview
+            {
+                CheckpointResults = env.CheckpointResults,
+            },
         };
     }
 }

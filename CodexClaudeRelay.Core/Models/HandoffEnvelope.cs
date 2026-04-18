@@ -45,4 +45,7 @@ public sealed record HandoffEnvelope
 
     [JsonPropertyName("created_at")]
     public DateTimeOffset CreatedAt { get; init; }
+
+    [JsonPropertyName("checkpoint_results")]
+    public IReadOnlyList<CheckpointResult> CheckpointResults { get; init; } = [];
 }

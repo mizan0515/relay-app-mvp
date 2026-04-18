@@ -658,6 +658,27 @@ public sealed class RelayBroker
             return await PauseWithResultAsync("Duplicate handoff detected. Relay was not committed twice.", cancellationToken);
         }
 
+        if (handoff.CheckpointResults.Count > 0)
+        {
+            var preCheckPacket = TurnPacketAdapter.FromHandoffEnvelope(handoff);
+            var preCheckReport = CheckpointVerifier.Verify(preCheckPacket);
+            if (preCheckReport.BlocksTurnClose)
+            {
+                var missing = string.Join(", ", preCheckReport.MissingEvidenceFor);
+                await _eventLogWriter.AppendAsync(
+                    State.SessionId,
+                    new RelayLogEvent(
+                        DateTimeOffset.Now,
+                        "checkpoint.evidence_missing",
+                        handoff.Source,
+                        $"Handoff blocked: non-PASS checkpoints without evidence_ref: {missing}"),
+                    cancellationToken);
+                return await PauseWithResultAsync(
+                    $"Handoff blocked by missing checkpoint evidence: {missing}.",
+                    cancellationToken);
+            }
+        }
+
         State.AcceptedRelayKeys.Add(relayKey);
         State.LastHandoff = handoff;
         State.LastHandoffHash = relayHash;
