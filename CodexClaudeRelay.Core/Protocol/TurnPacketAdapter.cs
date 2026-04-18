@@ -21,6 +21,8 @@ public static class TurnPacketAdapter
                 NextTask = env.Prompt,
                 Context = env.Reason,
                 ReadyForPeerVerification = env.Ready,
+                SuggestDone = env.SuggestDone,
+                DoneReason = env.DoneReason,
             },
             PeerReview = new PeerReview
             {
