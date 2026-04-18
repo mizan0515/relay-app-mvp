@@ -2,10 +2,10 @@
 
 root: .
 base: main
-iteration: 52
+iteration: 53
 status: active
-idle_upkeep_streak: 3
-next_iter_unblock_plan: iter53 — MVP 7/8 유지. iter52 에 B14 ADR-TOOLS-SMOKE-NEED.md 착륙(Option A 권고). iter53 후보 — (a) B13 METRICS 히스토그램(.autopilot/대시보드.md 하단 ASCII, non-protected) / (b) B11 EventHashStamper 순수 리팩터(RelayBroker.cs, non-protected) / (c) B15 flip-history digest(MVP-GATES.md protected → PR). 운영자 결정(G1 3건 + B14 A/B/C) 도착 시 즉시 해당 경로.
+idle_upkeep_streak: 4
+next_iter_unblock_plan: iter54 — MVP 7/8 유지. iter53 에 B13 히스토그램+flip 연표 착륙. iter54 후보 — (a) B11 EventHashStamper 순수 리팩터(RelayBroker.cs 55 호출부, non-protected, 테스트 포함) / (b) B15 flip-history digest(MVP-GATES.md protected → PR 필수) / (c) idle-upkeep 5회 streak 시 PROMPT 규칙대로 status:halted + LAST_HALT_NOTE 검토. 운영자 결정(G1 3건 + B14 A/B/C) 도착 시 즉시 해당 경로.
 backlog: .autopilot/BACKLOG.md (iter50 재작성: B2·B4·B5·B6·B7·B9 Completed · active=B1·B3·B10·B8 · 신규 brainstorm B11~B15)
 open_autopilot_prs: []
 merged_since_last_iter: [50, 61a55a4]
