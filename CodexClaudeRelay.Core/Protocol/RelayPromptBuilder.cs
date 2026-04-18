@@ -154,27 +154,36 @@ public static class RelayPromptBuilder
 
         return $$"""
         Your previous interactive reply did not end with a valid relay handoff.
-        Repair it now.
+        Repair it now so the broker records `handoff.accepted` (not a second
+        repair round).
 
         Output exactly this boundary format:
         {{HandoffStartMarker}}
         { ... one valid dad_handoff JSON object ... }
         {{HandoffEndMarker}}
 
-        Keep:
+        Required fields on the repaired handoff:
         - type="dad_handoff"
         - version=1
         - source="{{sourceValue}}"
         - target="{{targetValue}}"
         - session_id="{{context.SessionId}}"
         - turn={{context.TurnNumber}}
+        - ready=true  (set requires_human=true ONLY if you genuinely cannot
+          continue; do not use repair as a shortcut to pause)
 
-        Do not add commentary after {{HandoffEndMarker}}.
+        Do NOT:
+        - copy the previous invalid output into `reason`, `summary`,
+          `prompt`, or any other field — it is provided below only so you
+          can diagnose the parse error, not for echoing back;
+        - add commentary after {{HandoffEndMarker}};
+        - set `ready=false` unless the original task actually requires
+          human input.
 
         Original task:
         {{context.OriginalPrompt}}
 
-        Previous invalid output:
+        Previous invalid output (diagnosis only — do not echo):
         {{context.OriginalOutput}}
         """;
     }
