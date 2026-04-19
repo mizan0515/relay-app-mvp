@@ -25,17 +25,32 @@ Claude Code must not:
 - assume this repo ships `en/`/`ko/` variants — the template source repo is
   a separate project (`D:\dad-v2-system-template`)
 
-## Source Repo Workflow
+## Turn Flow
 
 1. Read `PROJECT-RULES.md`.
-2. Read `README.md`.
-3. Inspect the impacted files under `en/` and `ko/`.
-4. Apply shared behavior changes symmetrically unless the difference is intentionally language-only.
-5. Run `tools/Validate-TemplateVariants.ps1 -RunVariantValidators`.
-6. If source-repo-only files changed, verify `.githooks/pre-commit` and root validators still match the documented maintainer flow.
+2. Read `.autopilot/STATE.md` and `.autopilot/PROMPT.md` IMMUTABLE blocks.
+3. Read the DAD reference docs only if your task touches packet / handoff /
+   lifecycle semantics (`Document/DAD/*.md`).
+4. Apply symmetric behavior changes to both agent paths; language-only
+   differences must be called out explicitly.
+5. Run `dotnet build` + `dotnet test`, then the relevant validators
+   (`tools/Validate-Dad-Packet.ps1` for session artifacts,
+   `tools/run-smoke.ps1` for E2E).
+
+## When Contract Files Change
+
+If your task changes `PROJECT-RULES.md`, `AGENTS.md`, `CLAUDE.md`,
+`DIALOGUE-PROTOCOL.md`, prompts, hooks, or `.autopilot/` IMMUTABLE blocks:
+
+- keep all four contract files saying the **same thing** about this repo's
+  identity (peer-symmetric relay, not template maintainer)
+- open the PR in Korean for the non-developer operator to review
+- cite the relevant IMMUTABLE block + any required trailer
 
 ## Related Files
 
-- `AGENTS.md` - Codex source-repo contract
-- `DIALOGUE-PROTOCOL.md` - source-repo maintenance and parity protocol
-- `en/` / `ko/` - actual runtime template variants
+- `AGENTS.md` — Codex peer contract (mirrors this file)
+- `DIALOGUE-PROTOCOL.md` — relay runtime contract
+- `Document/DAD/*.md` — DAD-v2 protocol reference specs
+- external `D:\dad-v2-system-template` — read-only protocol spec source,
+  not a runtime target
