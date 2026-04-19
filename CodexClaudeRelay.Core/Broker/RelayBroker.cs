@@ -785,7 +785,14 @@ public sealed class RelayBroker : IBrokerCostContext
             new RelayLogEvent(DateTimeOffset.Now, "handoff.accepted", handoff.Source, $"Accepted handoff to {handoff.Target}.", handoff.Prompt),
             cancellationToken);
 
-        await WriteHandoffArtifactAsync(handoff, cancellationToken);
+        // ADR-G Option A: HandoffArtifactWriter only renders peer_handoff
+        // closeouts. Calling it on recovery_resume or final_no_handoff logs a
+        // spurious handoff_write_failed event AND silently drops the packet
+        // YAML / state.json writes that share the try-block. Skip it.
+        if (string.Equals(handoff.CloseoutKind, CloseoutKind.PeerHandoff, StringComparison.Ordinal))
+        {
+            await WriteHandoffArtifactAsync(handoff, cancellationToken);
+        }
 
         if (convergence is not null)
         {
