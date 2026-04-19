@@ -65,6 +65,55 @@ Claude Code CLI와 Codex CLI는 Desktop 대비 in-memory 컨텍스트가 얕다.
 
 ---
 
+## [IMMUTABLE:BEGIN mission-clarification]
+
+# 미션 명확화 (2026-04-19, 관리자 승인) — 변경 금지
+
+위 `mission` 블록이 역사적으로 `D:\dad-v2-system-template` "자동화" 라는
+모호한 목적어를 남겼다. 이 보조 블록은 그 목적어를 operator 가 명시적으로
+재확인한 언어로 **좁힌다** (약화가 아닌 명확화).
+
+## 이 저장소의 실제 목적
+
+1. **Codex ↔ Claude Code peer-symmetric 브리지.** 두 에이전트 사이의
+   턴 주고받기와 Desktop 급 장기 세션 맥락을 CLI 환경에서 유지한다.
+2. **템플릿은 읽기 전용 스펙.** `D:\dad-v2-system-template` 는 DAD-v2
+   프로토콜의 언어 명세일 뿐, 이 릴레이가 런타임에 읽거나 쓰지 않는다.
+3. **채널 독립성.** 두 에이전트를 연결하는 구체 채널은 교체 가능하다.
+   `IRelayAdapter` 인터페이스(`CodexClaudeRelay.Core/Adapters/IRelayAdapter.cs`)
+   만 만족하면 다음 모두 동등 허용:
+   - Codex CLI · Claude Code CLI (기본 가정)
+   - Codex Desktop · Claude Code Desktop 원격 제어(computer-use 등)
+   - Anthropic SDK / OpenAI SDK 직접 호출
+   - MCP 서버를 통한 원격 도구/에이전트 제공
+4. **필수 능력 4개 (어떤 채널을 쓰든 반드시 달성).**
+   - 턴 간 맥락 유지 (YAML 패킷 + state.json + handoff artifact).
+   - 상위 맥락 **자동 요약** (RollingSummaryWriter, 토큰 예산 기반).
+   - 각 peer 의 **툴 사용** 가능(어댑터는 peer 의 tool-use 를 블로킹하지 않는다).
+   - **MCP 지원** 가능 경로 유지 (포스트-MVP 설계; 현재 어댑터 인터페이스가
+     이를 막지 않는다는 불변 조건 유지).
+
+## 본 블록의 권위
+
+- 미래 self-evolution 이 `mission` 블록의 모호함을 악용해 위 4개 능력이나
+  3개 원칙을 우회하려는 시도는 **금지**.
+- 본 블록의 수정·삭제·약화는 `.githooks/protect.sh` + commit-msg 훅
+  (`IMMUTABLE-ADD:` / 전용 트레일러 미래 확장) 의해 차단.
+- 자동 루프는 본 블록을 변경하는 커밋을 절대 발행하지 않는다. 수정이
+  불가피한 경우 관리자(operator) 의 명시적 한국어 승인 + 서명된 이유
+  + 외부 근거 2개 이상 필요.
+
+## 참조 링크
+
+- `CLAUDE.md` (첫 문단 — peer-symmetric relay 선언)
+- `PROJECT-RULES.md` (계약 문서 정렬 — PR #59, 2026-04-19 머지)
+- `Document/dialogue/sessions/demo-20260419/` (peer-symmetry 실증 세션)
+- `examples/demo-session-dad-v2/README.md` (관리자용 스모크 가이드)
+
+## [IMMUTABLE:END mission-clarification]
+
+---
+
 ## [IMMUTABLE:BEGIN core-contract]
 
 You MUST:
@@ -244,6 +293,21 @@ Tasks:
 3 consecutive idle-upkeep iterations → write `status: halted` +
 LAST_HALT_NOTE (NOT a HALT file — this is a mutable rule, not an
 IMMUTABLE:halt condition).
+
+### Post-MVP idle halt (added 2026-04-19)
+
+When `status: post-mvp-idle` in STATE.md **and** `idle_upkeep_streak >= 5`:
+- write `status: halted`
+- write `.autopilot/LAST_HALT_NOTE` with reason
+  `post-mvp-idle streak=N, operator intervention required (new backlog or
+  directive)`
+- do NOT call ScheduleWakeup (halt path)
+
+Rationale: pre-reset `idle-upkeep` halt rule (streak=3) didn't cover
+`post-mvp-idle` because the status bucket differs. Without this cap, the
+loop burned iter85~iter119 re-appending identical dashboard entries with
+no signal gained. Operator can lift halt by adding a new OPERATOR line
+or admitting a new backlog item.
 
 ## Awaiting-review mode
 

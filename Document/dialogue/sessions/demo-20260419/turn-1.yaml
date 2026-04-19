@@ -1,0 +1,76 @@
+type: turn
+from: codex
+turn: 1
+session_id: "2026-04-19-demo-bridge-smoke"
+
+contract:
+  status: "proposed"
+  checkpoints:
+    - id: "cp-1"
+      description: "두 peer 가 동일한 turn-{N}.yaml 스키마로 라운드트립 가능"
+    - id: "cp-2"
+      description: "handoff prompt artifact 가 next peer 에게 세션 전체 맥락을 전달"
+  amendments: []
+
+peer_review:
+  project_analysis: |
+    D:\codex-claude-relay 는 Codex ↔ Claude Code peer-symmetric relay.
+    D:\dad-v2-system-template 의 DAD-v2 프로토콜 스펙(ko/Document/DAD/*)
+    을 참조 기준으로 삼아, 이 브리지가 실제로 두 피어 사이 턴을 주고받을
+    수 있는지 최소 스모크를 수행한다. 이 세션은 그 첫 턴(Codex 제안)이다.
+  task_model_review:
+    status: "aligned"
+    coverage_gaps: []
+    scope_creep: []
+    risk_followups: []
+    amendments: []
+  checkpoint_results: {}
+  issues_found: []
+  fixes_applied: []
+
+my_work:
+  task_model:
+    goal: "relay MVP 가 peer-symmetric 이라는 기술 주장이 실제 아티팩트로 증명"
+    scope: "데모 세션 1개 (turn-1 codex → turn-2 claude-code) 커밋 + validator 통과"
+    non_goals:
+      - "실제 두 CLI 연결(별도 B8 harness 작업)"
+      - "MCP 배선(별도 포스트-MVP 백로그)"
+  plan: |
+    1. Codex 턴에서 세션 계약·체크포인트·peer_review 초안 생성.
+    2. Claude Code 턴(turn-2)이 cp-1/cp-2 를 실행하고 결과 기록.
+    3. turn-2 는 final_no_handoff 로 세션 봉인.
+    4. tools/Validate-Dad-Packet.ps1 가 양쪽 패킷을 PASS 해야 한다.
+  changes:
+    files_modified: []
+    files_created:
+      - "Document/dialogue/sessions/demo-20260419/turn-1.yaml"
+      - "Document/dialogue/sessions/demo-20260419/turn-1-handoff.md"
+      - "Document/dialogue/sessions/demo-20260419/state.json"
+    summary: "세션 계약 + 첫 턴 peer_review + handoff prompt 착륙"
+  self_iterations: 0
+  evidence:
+    commands:
+      - "dotnet build CodexClaudeRelay.sln"
+      - "dotnet test CodexClaudeRelay.sln --filter FullyQualifiedName~PacketIOTests"
+    artifacts:
+      - "Document/dialogue/sessions/demo-20260419/turn-1.yaml"
+  verification: |
+    PacketIO round-trip 테스트가 양쪽 from 값(codex, claude-code)을 모두
+    통과하므로 이 턴은 기존 96/96 테스트 스위트 안에서 기계적으로 검증됨.
+  open_risks:
+    - "Desktop 어댑터(ClaudeCliAdapter/CodexCliAdapter)를 실제 CLI 에 붙이는 harness 는 아직 없음 — B8 의 follow-up"
+  confidence: "high"
+
+handoff:
+  closeout_kind: "peer_handoff"
+  next_task: "turn-2 에서 cp-1/cp-2 실행·결과 기록 후 세션 final_no_handoff 봉인"
+  context: |
+    turn-1 의 계약·체크포인트·프로젝트 분석을 받아, Claude Code 가 peer 로서
+    체크포인트 결과를 채우고 self-iteration 없이 세션을 닫는다. 이 데모는
+    '릴레이가 실제로 peer-symmetric 인가' 를 증명하는 최소 증거 세션이다.
+  questions:
+    - "turn-2 는 dotnet test 실행 로그를 evidence.commands 에 추가로 기록할 것"
+  prompt_artifact: "turn-1-handoff.md"
+  ready_for_peer_verification: true
+  suggest_done: false
+  done_reason: ""

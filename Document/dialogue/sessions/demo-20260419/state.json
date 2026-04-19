@@ -1,0 +1,25 @@
+{
+  "session_id": "2026-04-19-demo-bridge-smoke",
+  "created_at": "2026-04-19T00:00:00Z",
+  "closed_at": "2026-04-19T00:00:00Z",
+  "status": "closed",
+  "participants": ["codex", "claude-code"],
+  "turn_count": 2,
+  "final_closeout": "final_no_handoff",
+  "mode": "hybrid",
+  "scope": "small",
+  "checkpoints": [
+    { "id": "cp-1", "status": "pass" },
+    { "id": "cp-2", "status": "pass" }
+  ],
+  "artifacts": [
+    "turn-1.yaml",
+    "turn-2.yaml",
+    "turn-1-handoff.md",
+    "summary.md",
+    "state.json"
+  ],
+  "spec_reference": "D:\\dad-v2-system-template\\ko\\Document\\DAD\\PACKET-SCHEMA.md",
+  "backlog_links": [],
+  "notes": "브리지 MVP 증거용 데모 세션. 실제 두 CLI 연결 harness 는 B8(별도 백로그)."
+}

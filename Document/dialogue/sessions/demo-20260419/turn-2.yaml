@@ -1,0 +1,72 @@
+type: turn
+from: claude-code
+turn: 2
+session_id: "2026-04-19-demo-bridge-smoke"
+
+contract:
+  status: "accepted"
+  checkpoints:
+    - id: "cp-1"
+      description: "두 peer 가 동일한 turn-{N}.yaml 스키마로 라운드트립 가능"
+    - id: "cp-2"
+      description: "handoff prompt artifact 가 next peer 에게 세션 전체 맥락을 전달"
+  amendments: []
+
+peer_review:
+  task_model_review:
+    status: "aligned"
+    coverage_gaps: []
+    scope_creep: []
+    risk_followups:
+      - "B8 headless smoke harness 는 포스트-MVP 백로그로 유지"
+    amendments: []
+  checkpoint_results:
+    cp-1:
+      status: "pass"
+      evidence_ref: "CodexClaudeRelay.Core.Tests/Protocol/PacketIOTests.cs"
+      note: "PacketIOTests.Round_trip_file_preserves_all_fields (Theory: Codex, Claude) 녹색"
+    cp-2:
+      status: "pass"
+      evidence_ref: "Document/dialogue/sessions/demo-20260419/turn-1-handoff.md"
+      note: "turn-1 이 생성한 handoff.md 가 이 턴(turn-2)의 입력으로 일관되게 소비됨"
+  issues_found: []
+  fixes_applied: []
+
+my_work:
+  task_model:
+    goal: "cp-1/cp-2 실행 후 세션을 final_no_handoff 로 봉인"
+    scope: "turn-2 패킷 + 세션 summary artifact 착륙, state.json 을 closed 로 전환"
+    non_goals:
+      - "세션 밖 포스트-MVP 기능 착륙"
+  plan: |
+    1. PacketIOTests 가 이미 양쪽 from 라운드트립을 증명 → cp-1 pass.
+    2. turn-1-handoff.md 가 이 턴의 입력으로 실제 소비됨 → cp-2 pass.
+    3. summary.md 에 세션 롤링 요약(carry-forward 형식) 기록.
+    4. state.json 을 closed + closeout_kind: final_no_handoff 로 갱신.
+  changes:
+    files_modified:
+      - "Document/dialogue/sessions/demo-20260419/state.json"
+    files_created:
+      - "Document/dialogue/sessions/demo-20260419/turn-2.yaml"
+      - "Document/dialogue/sessions/demo-20260419/summary.md"
+    summary: "peer 검증 통과 + 세션 봉인 + 롤링 요약 착륙"
+  self_iterations: 0
+  evidence:
+    commands:
+      - "dotnet test CodexClaudeRelay.sln"
+    artifacts:
+      - "CodexClaudeRelay.Core.Tests/Protocol/PacketIOTests.cs"
+      - "Document/dialogue/sessions/demo-20260419/summary.md"
+  verification: "테스트 96/96 통과 · PacketIO round-trip 양쪽 from 그린"
+  open_risks: []
+  confidence: "high"
+
+handoff:
+  closeout_kind: "final_no_handoff"
+  next_task: ""
+  context: ""
+  questions: []
+  prompt_artifact: ""
+  ready_for_peer_verification: false
+  suggest_done: true
+  done_reason: "cp-1/cp-2 전부 pass · 세션 목적(peer-symmetric 실증) 달성"
