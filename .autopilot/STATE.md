@@ -2,13 +2,13 @@
 
 root: .
 base: main
-iteration: 119
-status: post-mvp-idle  # iter119: MVP 완주 후 idle-upkeep, 운영자 지시 대기
-idle_upkeep_streak: 24
-next_iter_unblock_plan: iter120 — post-MVP 백로그(B16/B17/B18) 운영자 승인 대기 지속
-backlog: .autopilot/BACKLOG.md (B1·B2·B3·B4·B5·B6·B7·B9·B12·B13·B13.1·B14·B15 DONE · B11 CLOSED · B10 SPEC-LANDED · active=B8 blocked · post-MVP B16/B17/B18)
-open_autopilot_prs: []  # iter95: PR #58 머지 완료
-merged_since_last_iter: [58]  # iter95: 🎉 G1 flip PR 관리자 머지 → MVP 8/8
+iteration: 135
+status: post-mvp-sprint-landed  # iter135: 11 PR 스프린트 착륙 후 재-idle 진입
+idle_upkeep_streak: 0  # iter120~134 활성 스프린트(B17/B8/examples/ADR/드리프트 정리)로 리셋
+next_iter_unblock_plan: iter136 — 새 자율 작업(B3/B10/F 제외) 발굴 또는 idle-upkeep
+backlog: .autopilot/BACKLOG.md (B1·B2·B4·B5·B6·B7·B8·B9·B12·B13·B13.1·B14·B15·B17(A) DONE · B11 CLOSED · B10 SPEC-LANDED · B3·F 운영자 대기)
+open_autopilot_prs: []  # iter134: PR #69/#70 머지 완료
+merged_since_last_iter: [60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70]  # iter120~134 스프린트
 mvp_gates: 8/8 🎉🎉🎉 COMPLETE (PR #58 merged 2026-04-18T20:12Z · commit 0da8b0d)
 
 # 영구 OPERATOR 지시 (2026-04-18 chat) — 모든 future iter 준수:
