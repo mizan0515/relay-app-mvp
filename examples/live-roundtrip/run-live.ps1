@@ -6,8 +6,8 @@
 
 param(
     [string]$OutDir,
-    [string]$TemplateRoot = 'D:\dad-v2-system-template',
-    [string]$TemplateVariant = 'en'
+    [string]$TemplateRoot = $(if ($env:DAD_TEMPLATE_ROOT) { $env:DAD_TEMPLATE_ROOT } else { 'D:\dad-v2-system-template' }),
+    [string]$TemplateVariant = $(if ($env:DAD_TEMPLATE_VARIANT) { $env:DAD_TEMPLATE_VARIANT } else { 'en' })
 )
 
 $ErrorActionPreference = 'Stop'

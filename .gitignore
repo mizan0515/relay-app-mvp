@@ -8,6 +8,9 @@
 # Runtime / local data
 logs/
 auto-logs/
+session-workspace/
+examples/**/session-workspace/
+examples/**/session-out/
 .autopilot/HALT
 .autopilot/LOCK
 .autopilot/NEXT_DELAY
