@@ -186,6 +186,12 @@
                         Margin="0,0,8,0"
                         Click="AdvanceButton_Click"
                         Content="Advance Once" />
+                <Button x:Name="RunCycleButton"
+                        Width="130"
+                        Height="34"
+                        Margin="0,0,8,0"
+                        Click="RunCycleButton_Click"
+                        Content="Run One Cycle" />
                 <Button x:Name="AutoRunButton"
                         Width="120"
                         Height="34"

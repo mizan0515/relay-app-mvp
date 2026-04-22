@@ -142,13 +142,27 @@ public partial class MainWindow : Window
                 ? "Read PROJECT-RULES.md first. Start the relay session."
                 : InitialPromptTextBox.Text.Trim();
 
-            await _broker!.StartSessionAsync(sessionId, AgentRole.Codex, firstPrompt, CancellationToken.None);
+            await _broker!.StartSessionAsync(
+                sessionId,
+                AgentRole.Codex,
+                firstPrompt,
+                TryLoadSessionBootstrap(),
+                CancellationToken.None);
         });
     }
 
     private async void AdvanceButton_Click(object sender, RoutedEventArgs e)
     {
         await AdvanceAsync(1);
+    }
+
+    private async void RunCycleButton_Click(object sender, RoutedEventArgs e)
+    {
+        await RunTurnBatchWithPauseAsync(
+            turns: 2,
+            busyMessage: "Running one relay cycle...",
+            successPauseReason: "Paused intentionally after one successful relay cycle.",
+            successStatusMessage: "One relay cycle completed successfully. Session paused intentionally.");
     }
 
     private async void CheckAdaptersButton_Click(object sender, RoutedEventArgs e)
@@ -162,7 +176,11 @@ public partial class MainWindow : Window
 
     private async void AutoRunButton_Click(object sender, RoutedEventArgs e)
     {
-        await AdvanceAsync(4);
+        await RunTurnBatchWithPauseAsync(
+            turns: 4,
+            busyMessage: "Running four relay turns...",
+            successPauseReason: "Paused intentionally after four successful relay turns.",
+            successStatusMessage: "Four relay turns completed successfully. Session paused intentionally.");
     }
 
     private async void SmokeTestButton_Click(object sender, RoutedEventArgs e)
@@ -294,6 +312,47 @@ public partial class MainWindow : Window
         });
     }
 
+    private async Task RunTurnBatchWithPauseAsync(
+        int turns,
+        string busyMessage,
+        string successPauseReason,
+        string successStatusMessage)
+    {
+        await RunOperationAsync(busyMessage, async () =>
+        {
+            for (var i = 0; i < turns; i++)
+            {
+                if (_broker is null)
+                {
+                    StatusMessageTextBlock.Text = "Broker is not initialized.";
+                    return;
+                }
+
+                var turnNumber = i + 1;
+                SetBusyState(true, $"Running turn {turnNumber} of {turns} on {_broker.State.ActiveAgent}...");
+                StatusMessageTextBlock.Text = $"Running turn {turnNumber} of {turns} on {_broker.State.ActiveAgent}...";
+                RefreshUi();
+                await YieldToUiAsync();
+                var result = await _broker.AdvanceAsync(CancellationToken.None);
+                StatusMessageTextBlock.Text = result.Message;
+                RefreshUi();
+
+                if (!result.Succeeded)
+                {
+                    SetBusyState(true, $"Run stopped on turn {turnNumber}. Final status: {result.Message}");
+                    return;
+                }
+            }
+
+            if (_broker is not null)
+            {
+                await _broker.PauseAsync(successPauseReason, CancellationToken.None);
+                StatusMessageTextBlock.Text = successStatusMessage;
+                RefreshUi();
+            }
+        });
+    }
+
     private async Task RunOperationAsync(string busyMessage, Func<Task> operation)
     {
         try
@@ -341,6 +400,7 @@ public partial class MainWindow : Window
         var state = _broker.State;
         var activePendingApproval = _livePendingApproval ?? state.PendingApproval;
         SessionRiskBadgeTextBlock.Text = $"Risk: {BuildSessionRiskBadgeText(state, activePendingApproval, IsAutoApproveAllRequestsEnabled())}";
+        var now = DateTimeOffset.Now;
         StateSummaryTextBlock.Text =
             $"Runtime: {GetRuntimeModeLabel()}{Environment.NewLine}" +
             $"Auto-approve all approvals: {(IsAutoApproveAllRequestsEnabled() ? "enabled" : "disabled")}{Environment.NewLine}" +
@@ -351,7 +411,10 @@ public partial class MainWindow : Window
             $"Active role: {state.ActiveAgent}{Environment.NewLine}" +
             $"Current turn: {state.CurrentTurn}{Environment.NewLine}" +
             $"Repair attempts: {state.RepairAttempts}{Environment.NewLine}" +
-            $"Session age: {(DateTimeOffset.Now - state.SessionStartedAt):mm\\:ss}{Environment.NewLine}" +
+            $"Session age: {(now - state.SessionStartedAt):mm\\:ss}{Environment.NewLine}" +
+            $"Last progress at: {state.UpdatedAt:O}{Environment.NewLine}" +
+            $"Last progress age: {FormatElapsed(now - state.UpdatedAt)}{Environment.NewLine}" +
+            $"Turn watchdog: {FormatTurnWatchdog(state, now, _broker.Options.PerTurnTimeout)}{Environment.NewLine}" +
             $"Rotations: {state.RotationCount}{Environment.NewLine}" +
             $"Total input tokens: {state.TotalInputTokens}{Environment.NewLine}" +
             $"Total output tokens: {state.TotalOutputTokens} / {_broker.Options.MaxCumulativeOutputTokens}{Environment.NewLine}" +
@@ -435,6 +498,9 @@ public partial class MainWindow : Window
 
         try
         {
+            AdapterStatusTextBlock.Text = "Checking adapter health...";
+            ApplyVisualStates();
+            await YieldToUiAsync();
             var statuses = await GetAdapterStatusesWithTimeoutAsync(CancellationToken.None);
             SetAdapterStatuses(statuses);
         }
@@ -509,13 +575,57 @@ public partial class MainWindow : Window
             ? count
             : 0;
 
+    private static string FormatElapsed(TimeSpan elapsed)
+    {
+        if (elapsed < TimeSpan.Zero)
+        {
+            elapsed = TimeSpan.Zero;
+        }
+
+        return elapsed.TotalHours >= 1
+            ? elapsed.ToString(@"hh\:mm\:ss")
+            : elapsed.ToString(@"mm\:ss");
+    }
+
+    private static string FormatTurnWatchdog(RelaySessionState state, DateTimeOffset now, TimeSpan perTurnTimeout)
+    {
+        if (state.Status != RelaySessionStatus.Active)
+        {
+            return $"inactive ({state.Status})";
+        }
+
+        if (perTurnTimeout <= TimeSpan.Zero)
+        {
+            return "disabled";
+        }
+
+        var elapsed = now - state.UpdatedAt;
+        var remaining = perTurnTimeout - elapsed;
+        if (remaining < TimeSpan.Zero)
+        {
+            return $"expired {FormatElapsed(-remaining)} ago";
+        }
+
+        return $"{FormatElapsed(remaining)} remaining";
+    }
+
     private void SetAdapterStatuses(IReadOnlyDictionary<string, AdapterStatus> statuses)
     {
         _latestAdapterStatuses = statuses;
+        if (statuses.Count == 0)
+        {
+            AdapterStatusTextBlock.Text = $"Checked at {DateTimeOffset.Now:O}{Environment.NewLine}(no adapters reported)";
+            ApplyVisualStates();
+            return;
+        }
+
         AdapterStatusTextBlock.Text = string.Join(
             Environment.NewLine,
-            statuses.Select(pair =>
-                $"{pair.Key}: {pair.Value.Health} | Auth={(pair.Value.IsAuthenticated ? "yes" : "no")} | {pair.Value.Message}"));
+            new[]
+            {
+                $"Checked at {DateTimeOffset.Now:O}"
+            }.Concat(statuses.Select(pair =>
+                $"{pair.Key}: {pair.Value.Health} | Auth={(pair.Value.IsAuthenticated ? "yes" : "no")} | {pair.Value.Message}")));
         ApplyVisualStates();
     }
 
@@ -702,6 +812,7 @@ public partial class MainWindow : Window
         CheckAdaptersButton.IsEnabled = !_isBusy;
         SmokeTestButton.IsEnabled = !_isBusy;
         AdvanceButton.IsEnabled = !_isBusy;
+        RunCycleButton.IsEnabled = !_isBusy;
         AutoRunButton.IsEnabled = !_isBusy;
         PauseButton.IsEnabled = !_isBusy;
         StopButton.IsEnabled = !_isBusy;
@@ -1595,6 +1706,10 @@ public partial class MainWindow : Window
 
             var snapshotText = BuildAutomaticSnapshotText();
             File.WriteAllText(Path.Combine(autoLogDirectory, "current-status.txt"), snapshotText);
+            var signalJson = BuildRelaySignalJson();
+            var signalText = BuildRelaySignalText();
+            File.WriteAllText(Path.Combine(autoLogDirectory, "relay-live-signal.json"), signalJson);
+            File.WriteAllText(Path.Combine(autoLogDirectory, "relay-live-signal.txt"), signalText);
 
             if (_broker is not null && !string.IsNullOrWhiteSpace(_broker.State.SessionId))
             {
@@ -1604,6 +1719,7 @@ public partial class MainWindow : Window
 
             var latestHandoffText = LatestHandoffTextBox.Text ?? "No handoff accepted yet.";
             File.WriteAllText(Path.Combine(autoLogDirectory, "latest-handoff.json"), latestHandoffText);
+            MirrorRelaySignalToManagedWorkspace(signalJson, signalText);
         }
         catch
         {
@@ -1657,6 +1773,124 @@ public partial class MainWindow : Window
         builder.AppendLine("## Session Approval Rules");
         builder.AppendLine(SessionApprovalRulesTextBox.Text ?? "No saved session approval rules.");
         return builder.ToString().TrimEnd() + Environment.NewLine;
+    }
+
+    private string BuildRelaySignalJson()
+    {
+        var now = DateTimeOffset.Now;
+        var status = _broker?.State.Status.ToString() ?? "Idle";
+        var activeRole = _broker?.State.ActiveAgent ?? "(none)";
+        var currentTurn = _broker?.State.CurrentTurn ?? 0;
+        var lastProgressAt = _broker?.State.UpdatedAt ?? now;
+        var progressAge = now - lastProgressAt;
+        var watchdogSeconds = _broker is null
+            ? (int?)null
+            : CalculateWatchdogRemainingSeconds(_broker.State, now, _broker.Options.PerTurnTimeout);
+        var signal = new Dictionary<string, object?>
+        {
+            ["generated_at"] = now.ToString("O"),
+            ["session_id"] = _broker?.State.SessionId ?? string.Empty,
+            ["status"] = status,
+            ["is_terminal"] = IsSignalTerminal(status),
+            ["active_role"] = activeRole,
+            ["current_turn"] = currentTurn,
+            ["last_progress_at"] = lastProgressAt.ToString("O"),
+            ["last_progress_age_seconds"] = Math.Max(0, (int)progressAge.TotalSeconds),
+            ["watchdog_remaining_seconds"] = watchdogSeconds,
+            ["pending_approval_count"] = _broker?.State.ApprovalQueue.Count ?? 0,
+            ["pending_approval"] = FormatPendingApproval(_livePendingApproval ?? _broker?.State.PendingApproval),
+            ["last_error"] = _broker?.State.LastError ?? string.Empty,
+            ["signal_marker"] = BuildRelaySignalMarker(now),
+            ["done_marker"] = BuildRelayDoneMarker(),
+            ["event_log_path"] = _broker?.CurrentLogPath ?? string.Empty
+        };
+
+        return JsonSerializer.Serialize(signal, DisplayJsonOptions);
+    }
+
+    private string BuildRelaySignalText()
+    {
+        var builder = new System.Text.StringBuilder();
+        builder.AppendLine(BuildRelaySignalMarker(DateTimeOffset.Now));
+        builder.AppendLine(BuildRelayDoneMarker());
+        return builder.ToString();
+    }
+
+    private string BuildRelaySignalMarker(DateTimeOffset now)
+    {
+        if (_broker is null)
+        {
+            return "[RELAY_SIGNAL] status=idle session=(none) turn=0 role=(none) progress_age=00:00 watchdog=disabled approvals=0";
+        }
+
+        var state = _broker.State;
+        var watchdog = FormatTurnWatchdog(state, now, _broker.Options.PerTurnTimeout).Replace(' ', '_');
+        return $"[RELAY_SIGNAL] status={state.Status} session={state.SessionId} turn={state.CurrentTurn} role={state.ActiveAgent} progress_age={FormatElapsed(now - state.UpdatedAt)} watchdog={watchdog} approvals={state.ApprovalQueue.Count}";
+    }
+
+    private string BuildRelayDoneMarker()
+    {
+        if (_broker is null)
+        {
+            return "[RELAY_DONE] false status=idle";
+        }
+
+        var status = _broker.State.Status.ToString();
+        var done = IsSignalTerminal(status) ? "true" : "false";
+        var reason = string.IsNullOrWhiteSpace(_broker.State.LastError) ? "none" : Shorten(_broker.State.LastError, 80).Replace(' ', '_');
+        return $"[RELAY_DONE] {done} status={status} reason={reason}";
+    }
+
+    private void MirrorRelaySignalToManagedWorkspace(string signalJson, string signalText)
+    {
+        var autopilotGenerated = TryGetManagedWorkspaceGeneratedDirectory();
+        if (string.IsNullOrWhiteSpace(autopilotGenerated))
+        {
+            return;
+        }
+
+        Directory.CreateDirectory(autopilotGenerated);
+        File.WriteAllText(Path.Combine(autopilotGenerated, "relay-live-signal.json"), signalJson);
+        File.WriteAllText(Path.Combine(autopilotGenerated, "relay-live-signal.txt"), signalText);
+    }
+
+    private string? TryGetManagedWorkspaceGeneratedDirectory()
+    {
+        var workingDirectory = WorkingDirectoryTextBox.Text?.Trim();
+        if (string.IsNullOrWhiteSpace(workingDirectory) || !Directory.Exists(workingDirectory))
+        {
+            return null;
+        }
+
+        var directory = new DirectoryInfo(workingDirectory);
+        while (directory is not null)
+        {
+            var autopilotDirectory = Path.Combine(directory.FullName, ".autopilot");
+            if (Directory.Exists(autopilotDirectory))
+            {
+                return Path.Combine(autopilotDirectory, "generated");
+            }
+
+            directory = directory.Parent;
+        }
+
+        return null;
+    }
+
+    private static bool IsSignalTerminal(string status) =>
+        string.Equals(status, RelaySessionStatus.Converged.ToString(), StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(status, RelaySessionStatus.Failed.ToString(), StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(status, RelaySessionStatus.Stopped.ToString(), StringComparison.OrdinalIgnoreCase);
+
+    private static int? CalculateWatchdogRemainingSeconds(RelaySessionState state, DateTimeOffset now, TimeSpan perTurnTimeout)
+    {
+        if (state.Status != RelaySessionStatus.Active || perTurnTimeout <= TimeSpan.Zero)
+        {
+            return null;
+        }
+
+        var remaining = perTurnTimeout - (now - state.UpdatedAt);
+        return (int)Math.Floor(remaining.TotalSeconds);
     }
 
     private async Task EnsureBrokerAsync(CancellationToken cancellationToken, bool recreate = false)
@@ -1863,6 +2097,7 @@ public partial class MainWindow : Window
                 WorkingDirectory = WorkingDirectoryTextBox.Text?.Trim(),
                 SessionId = SessionIdTextBox.Text?.Trim(),
                 InitialPrompt = InitialPromptTextBox.Text,
+                AdmissionManifestPath = TryReadCurrentAdmissionManifestPath(),
                 UseInteractiveAdapters = UseInteractiveAdaptersCheckBox.IsChecked.GetValueOrDefault(),
                 AutoApproveAllRequests = AutoApproveAllRequestsCheckBox.IsChecked.GetValueOrDefault()
             };
@@ -1877,6 +2112,111 @@ public partial class MainWindow : Window
     }
 
     private string GetUiSettingsPath() => Path.Combine(_appDataDirectory, "ui-settings.json");
+
+    private string? TryReadCurrentAdmissionManifestPath()
+    {
+        try
+        {
+            var settingsPath = GetUiSettingsPath();
+            if (!File.Exists(settingsPath))
+            {
+                return null;
+            }
+
+            var settings = JsonSerializer.Deserialize<RelayUiSettings>(
+                File.ReadAllText(settingsPath),
+                HandoffJson.SerializerOptions);
+            return settings?.AdmissionManifestPath;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private RelaySessionBootstrap? TryLoadSessionBootstrap()
+    {
+        try
+        {
+            var manifestPath = TryReadCurrentAdmissionManifestPath();
+            if (string.IsNullOrWhiteSpace(manifestPath) || !File.Exists(manifestPath))
+            {
+                return null;
+            }
+
+            using var document = JsonDocument.Parse(File.ReadAllText(manifestPath));
+            var root = document.RootElement;
+            var task = root.TryGetProperty("task", out var taskElement) ? taskElement : default;
+            var guidance = root.TryGetProperty("guidance", out var guidanceElement) ? guidanceElement : default;
+            var decisionsNode = root.TryGetProperty("decisions", out var decisionsElement) ? decisionsElement : default;
+            var decisions = new List<string>();
+
+            if (decisionsNode.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var property in decisionsNode.EnumerateObject())
+                {
+                    var value = property.Value.GetString();
+                    if (!string.IsNullOrWhiteSpace(value))
+                    {
+                        decisions.Add($"{property.Name}: {value}");
+                    }
+                }
+            }
+
+            var constraints = new List<string>();
+            if (guidance.ValueKind == JsonValueKind.Object)
+            {
+                if (guidance.TryGetProperty("recommended_read_path", out var readPathElement) &&
+                    readPathElement.ValueKind == JsonValueKind.Array)
+                {
+                    var readPath = string.Join(" -> ", readPathElement.EnumerateArray()
+                        .Select(static item => item.GetString())
+                        .Where(static item => !string.IsNullOrWhiteSpace(item)));
+                    if (!string.IsNullOrWhiteSpace(readPath))
+                    {
+                        constraints.Add($"recommended_read_path: {readPath}");
+                    }
+                }
+
+                if (guidance.TryGetProperty("verification_expectation", out var verificationElement))
+                {
+                    var verification = verificationElement.GetString();
+                    if (!string.IsNullOrWhiteSpace(verification))
+                    {
+                        constraints.Add($"verification_expectation: {verification}");
+                    }
+                }
+
+                if (guidance.TryGetProperty("token_policy", out var tokenPolicyElement))
+                {
+                    var tokenPolicy = tokenPolicyElement.GetString();
+                    if (!string.IsNullOrWhiteSpace(tokenPolicy))
+                    {
+                        constraints.Add($"token_policy: {tokenPolicy}");
+                    }
+                }
+            }
+
+            return new RelaySessionBootstrap
+            {
+                Mode = "hybrid",
+                Scope = task.TryGetProperty("priority", out var priorityElement) &&
+                        string.Equals(priorityElement.GetString(), "P1", StringComparison.OrdinalIgnoreCase)
+                    ? "medium"
+                    : "small",
+                OriginBacklogId = task.TryGetProperty("slug", out var slugElement) ? slugElement.GetString() ?? string.Empty : string.Empty,
+                TaskBucket = task.TryGetProperty("bucket", out var bucketElement) ? bucketElement.GetString() ?? string.Empty : string.Empty,
+                TaskSummary = task.TryGetProperty("summary", out var summaryElement) ? summaryElement.GetString() ?? string.Empty : string.Empty,
+                ContractStatus = "accepted",
+                Decisions = decisions,
+                Constraints = constraints,
+            };
+        }
+        catch
+        {
+            return null;
+        }
+    }
 
     private static string Shorten(string text, int maxLength)
     {

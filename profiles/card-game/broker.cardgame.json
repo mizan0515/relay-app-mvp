@@ -1,0 +1,15 @@
+{
+  "maxCumulativeOutputTokens": 16000,
+  "cacheReadRatioFloor": 0.25,
+  "consecutiveLowCacheTurnsThreshold": 2,
+  "maxTurnsPerSession": 12,
+  "maxSessionDuration": "01:00:00",
+  "maxRepairAttempts": 1,
+  "fallbackClaudeBudgetUsd": 0.25,
+  "perTurnTimeout": "00:20:00",
+  "jobObject": {
+    "userCpuTimePerJob": "01:00:00",
+    "activeProcessLimit": 24,
+    "jobMemoryLimitBytes": 4294967296
+  }
+}
