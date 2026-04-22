@@ -56,6 +56,8 @@ call when a task needs Codex <-> Claude peer turns.
   - reads the compact relay live-signal artifact without opening the full JSONL log
 - `scripts/card-game/Wait-CardGameRelaySignal.ps1`
   - waits for a compact relay done marker with a hard timeout so operators do not wait forever
+- `scripts/card-game/Run-CardGameManagedRelay.ps1`
+  - the easiest operator path: prepare relay artifacts, run a bounded GUI worksession, then print only the compact signal markers
 - `docs/card-game-integration/TOKEN-SAVINGS.md`
   - token and validation budget rules for Unity work
 - `docs/card-game-integration/CLAUDE-BACKEND-NOTES.md`
@@ -94,13 +96,15 @@ call when a task needs Codex <-> Claude peer turns.
 Use these commands when you want the card-game autopilot and desktop relay to
 work together without reading large logs.
 
-1. Prepare or run the relay from this repo:
-   `powershell -ExecutionPolicy Bypass -File scripts/card-game/Invoke-CardGameAutopilotLoop.ps1 -ForceRelay`
+1. Easiest bounded operator run:
+   `powershell -ExecutionPolicy Bypass -File scripts/card-game/Run-CardGameManagedRelay.ps1 -TaskSlug companion-depth-first-slice -Turns 2 -ForceRelay`
 2. Read the compact live signal only:
    `powershell -ExecutionPolicy Bypass -File scripts/card-game/Get-CardGameRelaySignal.ps1`
 3. Wait for a bounded completion signal instead of tailing logs forever:
    `powershell -ExecutionPolicy Bypass -File scripts/card-game/Wait-CardGameRelaySignal.ps1 -TimeoutSeconds 1800`
-4. When the relay reaches a terminal session, integrate it back into the card-game autopilot:
+4. Full autopilot-driven preparation/execution path:
+   `powershell -ExecutionPolicy Bypass -File scripts/card-game/Invoke-CardGameAutopilotLoop.ps1 -ForceRelay`
+5. When the relay reaches a terminal session, integrate it back into the card-game autopilot:
    `powershell -ExecutionPolicy Bypass -File scripts/card-game/Complete-CardGameRelaySession.ps1`
 
 Relay live signal artifacts are mirrored into:
@@ -114,6 +118,20 @@ The text signal always starts with these sentinel lines:
 - `[RELAY_DONE] true|false ...`
 
 These are the only lines an LLM or operator needs to read for routine status checks.
+
+## How This Differs From The Old Autopilot Loop
+
+The old pattern was effectively:
+- keep one large prompt in Codex
+- repeat the same prompt forever
+- inspect long logs to infer whether work moved
+
+The relay-integrated pattern should be:
+- autopilot picks the slice and writes the prompt/runbook
+- relay runs a bounded peer session (`Turns 2` or `Turns 4`)
+- operators and LLMs read only `[RELAY_SIGNAL]` and `[RELAY_DONE]`
+- if the session is stale or timed out, the watcher exits instead of waiting forever
+- if the session reaches a terminal state, write-back goes through `Complete-CardGameRelaySession.ps1`
 
 ## Immediate gaps still to implement in code
 
