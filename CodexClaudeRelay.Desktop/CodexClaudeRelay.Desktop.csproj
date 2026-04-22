@@ -4,6 +4,10 @@
     <ProjectReference Include="..\CodexClaudeRelay.Core\CodexClaudeRelay.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="CodexClaudeRelay.HeadlessSmoke" />
+  </ItemGroup>
+
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
