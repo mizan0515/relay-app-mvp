@@ -1,19 +1,20 @@
 #!/usr/bin/env pwsh
-# tools/uia-gui-smoke.ps1
-# Drives the WPF Desktop UI via Windows UI Automation (no MCP needed):
-#   1. Launch CodexClaudeRelay.Desktop.exe
-#   2. Find the "Relay App MVP" window
-#   3. Set WorkingDirectory + check Auto-Approve
-#   4. Click "Smoke Test 2" (deterministic 2-turn smoke prompt)
-#   5. Wait for completion (poll busy overlay)
-#   6. Read state summary + smoke report and dump to console
-#   7. Take screenshots before/after for evidence
-# Exit code 0 on smoke success, 1 on failure.
+# examples/gui-smoke/run-gui-worksession.ps1
+# UIA-driven WPF runner for REAL work sessions (not smoke):
+#   1. Launch Desktop UI
+#   2. Set WorkingDir + SessionId + custom InitialPrompt + AutoApprove
+#   3. Check Adapters
+#   4. Start Session
+#   5. Auto Run 4 turns
+#   6. Poll StateSummary for Completed/Paused terminator
+#   7. Dump final state + report
 
 param(
-    [string]$WorkingDir = 'D:\dad-test-project',
-    [string]$ScreenshotDir = 'D:\codex-claude-relay\examples\real-project-sim\gui-smoke-out',
-    [int]$TimeoutSeconds = 180
+    [Parameter(Mandatory = $true)][string]$WorkingDir,
+    [Parameter(Mandatory = $true)][string]$InitialPrompt,
+    [string]$SessionId = "work-$(Get-Date -Format yyyyMMdd-HHmmss)",
+    [string]$ScreenshotDir = 'D:\codex-claude-relay\scripts\gui-smoke\out-worksession',
+    [int]$TimeoutSeconds = 600
 )
 
 $ErrorActionPreference = 'Stop'
@@ -32,7 +33,6 @@ function Save-Screen([string]$tag) {
     $g.Dispose(); $bmp.Dispose()
     Write-Host "[shot] $path"
 }
-
 function Find-Window([string]$title, [int]$timeoutSec = 30) {
     $deadline = (Get-Date).AddSeconds($timeoutSec)
     while ((Get-Date) -lt $deadline) {
@@ -45,7 +45,6 @@ function Find-Window([string]$title, [int]$timeoutSec = 30) {
     }
     throw "Window '$title' not found within $timeoutSec s"
 }
-
 function Find-ByAutomationId($parent, [string]$id) {
     $cond = New-Object System.Windows.Automation.PropertyCondition(
         [System.Windows.Automation.AutomationElement]::AutomationIdProperty, $id)
@@ -53,17 +52,14 @@ function Find-ByAutomationId($parent, [string]$id) {
     if (-not $el) { throw "AutomationId '$id' not found" }
     return $el
 }
-
 function Set-Text($el, [string]$text) {
     $vp = $el.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
     $vp.SetValue($text)
 }
-
 function Get-Text($el) {
     $vp = $el.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
     return $vp.Current.Value
 }
-
 function Wait-Enabled($el, [int]$timeoutSec = 60) {
     $deadline = (Get-Date).AddSeconds($timeoutSec)
     while ((Get-Date) -lt $deadline) {
@@ -72,100 +68,86 @@ function Wait-Enabled($el, [int]$timeoutSec = 60) {
     }
     throw "Element did not become enabled within $timeoutSec s"
 }
-
 function Click-Button($el) {
-    Wait-Enabled $el 60
+    Wait-Enabled $el 120
     $ip = $el.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
     $ip.Invoke()
 }
-
 function Toggle-On($el) {
     $tp = $el.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern)
     if ($tp.Current.ToggleState -ne [System.Windows.Automation.ToggleState]::On) { $tp.Toggle() }
 }
 
-Write-Host "=== UIA GUI smoke @ $(Get-Date -Format o) ==="
-Write-Host "exe:        $exe"
-Write-Host "workingDir: $WorkingDir"
-Write-Host "shots:      $ScreenshotDir"
-Write-Host ""
+Write-Host "=== UIA GUI worksession @ $(Get-Date -Format o) ==="
+Write-Host "workingDir:    $WorkingDir"
+Write-Host "sessionId:     $SessionId"
+Write-Host "initialPrompt: $($InitialPrompt.Substring(0, [Math]::Min(120, $InitialPrompt.Length)))..."
+Write-Host "shots:         $ScreenshotDir"
 
 if (-not (Test-Path $exe)) { throw "exe not built: $exe" }
 
-# Kill any pre-existing instance
 Get-Process CodexClaudeRelay.Desktop -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Seconds 1
 
-Write-Host "[1/7] launching..."
+Write-Host "[1/6] launching..."
 $proc = Start-Process -FilePath $exe -PassThru
 Start-Sleep -Seconds 4
-
-Write-Host "[2/7] finding window..."
 $win = Find-Window 'Relay App MVP' 30
 Save-Screen 'after-launch'
 
-Write-Host "[3/7] setting WorkingDirectory + AutoApprove..."
-$wdBox  = Find-ByAutomationId $win 'WorkingDirectoryTextBox'
-Set-Text $wdBox $WorkingDir
-
-$approveCb = Find-ByAutomationId $win 'AutoApproveAllRequestsCheckBox'
-Toggle-On $approveCb
+Write-Host "[2/6] configuring..."
+Set-Text (Find-ByAutomationId $win 'WorkingDirectoryTextBox') $WorkingDir
+Set-Text (Find-ByAutomationId $win 'SessionIdTextBox') $SessionId
+Set-Text (Find-ByAutomationId $win 'InitialPromptTextBox') $InitialPrompt
+Toggle-On (Find-ByAutomationId $win 'AutoApproveAllRequestsCheckBox')
 Start-Sleep -Milliseconds 500
 Save-Screen 'after-config'
 
-Write-Host "[4/7] clicking Check Adapters..."
-$checkBtn = Find-ByAutomationId $win 'CheckAdaptersButton'
-Click-Button $checkBtn
+Write-Host "[3/6] Check Adapters..."
+Click-Button (Find-ByAutomationId $win 'CheckAdaptersButton')
 Start-Sleep -Seconds 8
+$adapter = Get-Text (Find-ByAutomationId $win 'AdapterStatusTextBlock')
+Write-Host "--- adapter status ---`n$adapter`n----------------------"
 Save-Screen 'after-check-adapters'
-$adapter = (Get-Text (Find-ByAutomationId $win 'AdapterStatusTextBlock'))
-Write-Host "--- adapter status ---"
-Write-Host $adapter
-Write-Host "----------------------"
 
-Write-Host "[5/7] clicking Smoke Test 2..."
-$smokeBtn = Find-ByAutomationId $win 'SmokeTestButton'
-Click-Button $smokeBtn
+Write-Host "[4/6] Start Session..."
+Click-Button (Find-ByAutomationId $win 'StartSessionButton')
+Start-Sleep -Seconds 6
+Save-Screen 'after-start'
 
-Write-Host "[6/7] waiting for completion (timeout=${TimeoutSeconds}s)..."
+Write-Host "[5/6] Auto Run 4..."
+Click-Button (Find-ByAutomationId $win 'AutoRunButton')
+
+Write-Host "[6/6] polling state (timeout=${TimeoutSeconds}s)..."
 $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-$reportEl = Find-ByAutomationId $win 'SmokeTestReportTextBlock'
-$lastReport = ''
+$stateEl = Find-ByAutomationId $win 'StateSummaryTextBlock'
+$lastTurn = -1
 while ((Get-Date) -lt $deadline) {
-    Start-Sleep -Seconds 4
-    $r = Get-Text $reportEl
-    if ($r -ne $lastReport) {
-        $oneLine = ($r -replace '\s+', ' ').Trim()
-        if ($oneLine.Length -gt 140) { $oneLine = $oneLine.Substring(0, 140) + '...' }
-        Write-Host "  [poll] $oneLine"
-        $lastReport = $r
+    Start-Sleep -Seconds 6
+    $state = Get-Text $stateEl
+    $turnMatch = [regex]::Match($state, 'Current turn:\s*(\d+)')
+    $statusMatch = [regex]::Match($state, 'Status:\s*(\w+)')
+    $turn = if ($turnMatch.Success) { [int]$turnMatch.Groups[1].Value } else { -1 }
+    $status = if ($statusMatch.Success) { $statusMatch.Groups[1].Value } else { '?' }
+    if ($turn -ne $lastTurn) {
+        Write-Host "  [poll] turn=$turn status=$status"
+        $lastTurn = $turn
     }
-    if ($r -match 'PASS|FAIL|success|failed|completed|error|closed') {
-        Write-Host "  [poll] terminator detected"
+    if ($status -match 'Paused|Completed|Failed|Error|Stopped') {
+        Write-Host "  [poll] terminal status: $status"
         Start-Sleep -Seconds 2
         break
     }
 }
-Save-Screen 'after-smoke'
+Save-Screen 'after-autorun'
 
-Write-Host "[7/7] reading results..."
-$state  = Get-Text (Find-ByAutomationId $win 'StateSummaryTextBlock')
-$report = Get-Text (Find-ByAutomationId $win 'SmokeTestReportTextBlock')
 Write-Host ""
 Write-Host "=== StateSummary ==="
-Write-Host $state
+Get-Text (Find-ByAutomationId $win 'StateSummaryTextBlock') | Write-Host
 Write-Host ""
-Write-Host "=== SmokeTestReport ==="
-Write-Host $report
-Write-Host ""
+Write-Host "=== AdapterStatus (final) ==="
+Get-Text (Find-ByAutomationId $win 'AdapterStatusTextBlock') | Write-Host
 
-$success = $report -match 'PASS|success|completed'
-if ($success) {
-    Write-Host "=== GUI SMOKE: SUCCESS ==="
-    Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
-    exit 0
-} else {
-    Write-Host "=== GUI SMOKE: FAILED (no PASS/success token in report) ==="
-    Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
-    exit 1
-}
+Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+Write-Host ""
+Write-Host "=== WORKSESSION: finished ==="

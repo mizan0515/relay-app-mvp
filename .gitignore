@@ -9,8 +9,7 @@
 logs/
 auto-logs/
 session-workspace/
-examples/**/session-workspace/
-examples/**/session-out/
+examples/
 .autopilot/HALT
 .autopilot/LOCK
 .autopilot/NEXT_DELAY

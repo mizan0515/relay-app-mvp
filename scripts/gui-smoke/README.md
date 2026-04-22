@@ -29,12 +29,25 @@ Windows UI Automation (UIA) PowerShell 스크립트로 Codex / Claude Code 등
 
 ## 실행
 
+스모크(2턴 전송 검증):
+
 ```pwsh
-pwsh examples/gui-smoke/run-gui-smoke.ps1 `
+pwsh scripts/gui-smoke/run-gui-smoke.ps1 `
     -WorkingDir 'D:\some-test-project' `
-    -ScreenshotDir 'D:\codex-claude-relay\examples\real-project-sim\gui-smoke-out' `
     -TimeoutSeconds 180
 ```
+
+실작업(커스텀 프롬프트 + Auto Run 4):
+
+```pwsh
+pwsh scripts/gui-smoke/run-gui-worksession.ps1 `
+    -WorkingDir 'D:\some-test-project' `
+    -SessionId 'my-task' `
+    -InitialPrompt 'Read PROJECT-RULES.md. Task: ...' `
+    -TimeoutSeconds 600
+```
+
+기본 `ScreenshotDir` 은 `scripts/gui-smoke/out-*/` (이 디렉토리는 `.gitignore` 됨).
 
 종료 코드:
 - `0` — `SmokeTestReportTextBlock` 에 `PASS|success|completed` 토큰 검출
@@ -70,7 +83,7 @@ XAML 측 ID 변경 시 스크립트도 동기화 필요.
 
 ## 산출물 위치
 
-- 스크린샷: `-ScreenshotDir` 아래 `yyyyMMdd-HHmmss-<tag>.png`
+- 스크린샷: `-ScreenshotDir` 아래 `yyyyMMdd-HHmmss-<tag>.png` (기본 `scripts/gui-smoke/out-*/`, gitignore 됨)
 - 세션 이벤트 JSONL / 핸드오프 / 요약: `%LocalAppData%\CodexClaudeRelayMvp\`
   (`logs/`, `auto-logs/`, `summaries/`, `state-noninteractive.json`)
   — broker 의 `_appDataDirectory` 이며 `WorkingDirectory` 와 무관
@@ -92,10 +105,14 @@ StateSummary:    Status: Paused, Current turn: 3, Total cost: $0.0521
 이 러너는 보호 경로(`tools/`) 가 아닌 `examples/` 에 있으므로 두 에이전트가
 직접 호출/수정 가능하다.
 
+이 러너는 보호 경로(`tools/`) 가 아닌 `scripts/` 에 있으므로 두 에이전트 모두 직접 호출/수정 가능하다.
+
 권장 호출 패턴:
 
 ```bash
-pwsh examples/gui-smoke/run-gui-smoke.ps1 -WorkingDir <abs-path>
+pwsh scripts/gui-smoke/run-gui-smoke.ps1 -WorkingDir <abs-path>          # 전송 검증
+pwsh scripts/gui-smoke/run-gui-worksession.ps1 -WorkingDir <abs-path> `  # 실작업
+    -SessionId <id> -InitialPrompt <prompt>
 ```
 
 PR 작업 흐름에서:
@@ -103,5 +120,5 @@ PR 작업 흐름에서:
   돌려서 PASS 를 첨부한다 (스크린샷 또는 콘솔 로그 인용).
 - AutomationId 를 새로 추가하면 이 README 의 "의존하는 AutomationId"
   목록도 갱신한다.
-- 실패 시 `gui-smoke-out/*-after-smoke.png` 와 `%LocalAppData%\CodexClaudeRelayMvp\logs\`
-  의 최신 JSONL 을 함께 첨부한다.
+- 실패 시 `scripts/gui-smoke/out-*/*-after-smoke.png` 와
+  `%LocalAppData%\CodexClaudeRelayMvp\logs\` 의 최신 JSONL 을 첨부한다.
