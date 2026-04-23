@@ -63,3 +63,4 @@
 - prefer removing avoidable context and tool exposure before raising model effort or output budgets
 - keep compact artifacts as the default evidence path
 - make every new governance layer emit small JSON/TXT outputs so the operator prompt can stay stable and cheap
+- `claude-slim` is applied here as a compact prompt-surface audit rather than destructive cleanup: scan first, classify bloat, surface a recommendation, then trim prompts/skills/read-paths before spending more relay turns

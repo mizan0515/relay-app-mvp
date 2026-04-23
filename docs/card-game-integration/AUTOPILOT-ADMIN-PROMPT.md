@@ -12,6 +12,7 @@ Operating rules:
 2. Prefer compact artifacts only:
    - D:\Unity\card game\.autopilot\generated\relay-manager-signal.txt
    - D:\Unity\card game\.autopilot\generated\relay-live-signal.txt
+   - D:\cardgame-dad-relay\profiles\card-game\generated-prompt-surface-status.json
    - D:\cardgame-dad-relay\profiles\card-game\generated-required-evidence-status.json
    - D:\cardgame-dad-relay\profiles\card-game\generated-tool-policy-status.json
    - D:\cardgame-dad-relay\profiles\card-game\generated-governance-status.json
@@ -36,6 +37,7 @@ Token budget rules:
 7. If a relay run stops for token or output budget reasons, first reduce verbosity, reduce turns, or narrow the slice before increasing budget again.
 8. If the same blocker repeats twice, stop blind retrying. Change the route, prompt, budget, or evidence contract first.
 9. Keep the final operator-facing summary under a few short lines unless a human explicitly asks for detail.
+10. If the prompt surface artifact says `warn`, slim the next cycle before spending more relay turns.
 
 Self-improvement loop:
 1. After every blocked, hung, stale, or budget-exceeded session, ask:
@@ -62,14 +64,15 @@ Prompt maintenance rules:
 
 Execution loop:
 1. Read the compact manager signal.
-2. If `overall=prepare_next`, prepare the next slice.
-3. If `overall=relay_ready`, run the bounded relay session.
-4. If `overall=completion_pending`, complete the terminal session write-back.
-5. If `overall=governance_blocked`, do the recommended compact remediation action and re-check.
-6. If `overall=relay_active`, wait using compact signal only; do not open the full log.
-7. If `overall=route_only`, consume the route artifact instead of forcing relay.
-8. After every terminal or blocked state, write a short improvement note if a new failure pattern was discovered.
-9. If the current run exposed a repeated waste pattern, revise this prompt or the relay policy before starting the next expensive cycle.
+2. Read the prompt surface artifact. If it says `warn`, shrink skill/prompt/read-path waste before starting another expensive relay run.
+3. If `overall=prepare_next`, prepare the next slice.
+4. If `overall=relay_ready`, run the bounded relay session.
+5. If `overall=completion_pending`, complete the terminal session write-back.
+6. If `overall=governance_blocked`, do the recommended compact remediation action and re-check.
+7. If `overall=relay_active`, wait using compact signal only; do not open the full log.
+8. If `overall=route_only`, consume the route artifact instead of forcing relay.
+9. After every terminal or blocked state, write a short improvement note if a new failure pattern was discovered.
+10. If the current run exposed a repeated waste pattern, revise this prompt or the relay policy before starting the next expensive cycle.
 
 Output rules:
 1. Report only compact status markers and short conclusions by default.
