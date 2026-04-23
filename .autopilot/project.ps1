@@ -2,7 +2,10 @@
 #
 # All verbs run from the repo root (the script cd's there automatically).
 
-param([string]$Verb = 'help')
+param(
+  [string]$Verb = 'help',
+  [switch]$Lite
+)
 
 $ErrorActionPreference = 'Stop'
 
@@ -137,9 +140,18 @@ switch ($Verb) {
   }
 
   'start' {
-    Write-Host 'Paste the contents of .autopilot/RUN.txt into Claude Code.'
-    Write-Host 'Absolute path:'
-    Write-Host "  $repoRoot\.autopilot\RUN.txt"
+    if ($Lite -or $env:AUTOPILOT_LITE -eq '1') {
+      Write-Host 'Lite mode selected — use the low-context prompt for short maintenance iters.'
+      Write-Host 'Before starting the runner, set:'
+      Write-Host '  $env:AUTOPILOT_PROMPT_RELATIVE = ".autopilot/PROMPT.lite.md"'
+      Write-Host 'Lite prompt absolute path:'
+      Write-Host "  $repoRoot\.autopilot\PROMPT.lite.md"
+      Write-Host 'See PROMPT.md "Lite-mode reentry criteria" for when NOT to use this.'
+    } else {
+      Write-Host 'Paste the contents of .autopilot/RUN.txt into Claude Code.'
+      Write-Host 'Absolute path:'
+      Write-Host "  $repoRoot\.autopilot\RUN.txt"
+    }
   }
 
   'stop' {
@@ -161,7 +173,7 @@ Verbs:
   test            dotnet build CodexClaudeRelay.sln -c Release.
   audit           Outdated packages + churn hotspots + .cs counts.
   install-hooks   Sets core.hooksPath=.githooks; verifies + smoke-tests.
-  start           Print path to RUN.txt for pasting into Claude Code.
+  start [-Lite]   Print path to RUN.txt; with -Lite (or AUTOPILOT_LITE=1) prints PROMPT.lite.md invocation for short maintenance iters.
   stop            Create .autopilot/HALT (polite stop).
   resume          Remove .autopilot/HALT.
   check-reschedule  Verify previous iter actually called ScheduleWakeup (sentinel vs METRICS).
