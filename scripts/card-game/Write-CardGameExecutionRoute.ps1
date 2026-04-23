@@ -149,6 +149,13 @@ $recommendedAction = switch ($mode) {
   default { 'Run the desktop relay. This slice is expensive or cross-boundary enough to justify DAD coordination.' }
 }
 
+$postureGuardrailApplied = $false
+$postureGuardrailReason = ''
+if ($manifest.guidance.posture_guardrail) {
+  $postureGuardrailApplied = [bool]$manifest.guidance.posture_guardrail.applied
+  $postureGuardrailReason = [string]$manifest.guidance.execution_mode.reason
+}
+
 $route = [ordered]@{
   generated_at = (Get-Date).ToString('o')
   session_id = [string]$manifest.session_id
@@ -156,6 +163,8 @@ $route = [ordered]@{
   bucket = [string]$manifest.task.bucket
   execution_mode = $mode
   execution_mode_reason = $reason
+  posture_guardrail_applied = $postureGuardrailApplied
+  posture_guardrail_reason = $postureGuardrailReason
   recommended_action = $recommendedAction
   recommended_read_path = $readPath
   representative_target = $representativeTarget
@@ -182,6 +191,10 @@ $lines.Add('Task slug: ' + $route.task_slug)
 $lines.Add('Bucket: ' + $route.bucket)
 $lines.Add('Execution mode: ' + $route.execution_mode)
 $lines.Add('Execution mode reason: ' + $route.execution_mode_reason)
+if ($route.posture_guardrail_applied) {
+  $lines.Add('Posture guardrail: applied')
+  $lines.Add('Posture guardrail reason: ' + $route.posture_guardrail_reason)
+}
 $lines.Add('Recommended action: ' + $route.recommended_action)
 $lines.Add('Representative target: ' + $route.representative_target)
 $lines.Add('Verification expectation: ' + $route.verification_expectation)

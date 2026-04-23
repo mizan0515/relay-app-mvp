@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "high_risk_docs_mode": "docs-lite",
+  "high_risk_default_mode": "direct-codex",
+  "high_risk_keep_relay_buckets": [
+    "qa-editor",
+    "editmode-tests"
+  ],
+  "prompt_surface_warn_docs_mode": "docs-lite",
+  "prompt_surface_warn_default_mode": "direct-codex"
+}

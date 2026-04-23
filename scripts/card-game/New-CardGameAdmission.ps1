@@ -17,6 +17,9 @@ $dadDecisionsPath = Join-Path $dialogueRoot 'DECISIONS.md'
 $relayRepoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 $heuristicsPath = Join-Path $relayRepoRoot 'docs\card-game-integration\learning-memory\heuristics.json'
 $skillContractsPath = Join-Path $relayRepoRoot 'profiles\card-game\skill-contracts.json'
+$routePosturePolicyPath = Join-Path $relayRepoRoot 'profiles\card-game\route-posture-policy.json'
+$securityPosturePath = Join-Path $relayRepoRoot 'profiles\card-game\generated-security-posture.json'
+$promptSurfaceStatusPath = Join-Path $relayRepoRoot 'profiles\card-game\generated-prompt-surface-status.json'
 $skillsRoot = Join-Path $relayRepoRoot 'skills\card-game'
 
 if (-not $OutputPath) {
@@ -182,45 +185,132 @@ function Get-ContextSurface {
   }
 }
 
-function Get-ExecutionModeGuidance {
+function Read-JsonFile {
+  param([string]$Path)
+
+  if (-not $Path -or -not (Test-Path -LiteralPath $Path)) {
+    return $null
+  }
+
+  try {
+    return Get-Content -Raw -LiteralPath $Path -Encoding UTF8 | ConvertFrom-Json
+  } catch {
+    return $null
+  }
+}
+
+function Get-RoutePostureGuardrail {
   param(
     [string]$Bucket,
-    $BucketSurface,
-    $BucketHeuristic
+    [string]$DefaultMode,
+    [string]$DefaultReason,
+    $SecurityPosture,
+    $PromptSurface,
+    $Policy
   )
 
-  if ($Bucket -eq 'docs-or-autopilot') {
+  $keepRelayBuckets = if ($Policy -and $Policy.high_risk_keep_relay_buckets) {
+    @($Policy.high_risk_keep_relay_buckets)
+  } else {
+    @('qa-editor', 'editmode-tests')
+  }
+
+  if ($SecurityPosture -and [string]$SecurityPosture.risk -eq 'high') {
+    if ($Bucket -eq 'docs-or-autopilot') {
+      return [ordered]@{
+        applied = $true
+        mode = if ($Policy.high_risk_docs_mode) { [string]$Policy.high_risk_docs_mode } else { 'docs-lite' }
+        reason = "Previous security posture is high ($([string]$SecurityPosture.reason)); use the cheapest docs/autopilot route before another relay cycle."
+      }
+    }
+
+    if ($keepRelayBuckets -contains $Bucket) {
+      return [ordered]@{
+        applied = $true
+        mode = $DefaultMode
+        reason = "Previous security posture is high ($([string]$SecurityPosture.reason)), but bucket $Bucket still requires relay-grade verification."
+      }
+    }
+
     return [ordered]@{
-      mode = 'docs-lite'
-      reason = 'Docs and autopilot maintenance usually do not need full DAD; start with the lightest prompt/profile.'
+      applied = $true
+      mode = if ($Policy.high_risk_default_mode) { [string]$Policy.high_risk_default_mode } else { 'direct-codex' }
+      reason = "Previous security posture is high ($([string]$SecurityPosture.reason)); narrow the next slice before another expensive relay cycle."
     }
   }
 
-  if ($BucketHeuristic -and $BucketHeuristic.preferred_execution_mode -and $BucketHeuristic.route_samples -ge 1) {
-    return [ordered]@{
-      mode = [string]$BucketHeuristic.preferred_execution_mode
-      reason = "Learned from route/session history for bucket $Bucket across $($BucketHeuristic.route_samples) route sample(s)."
+  if ($PromptSurface -and [string]$PromptSurface.status -eq 'warn') {
+    if ($Bucket -eq 'docs-or-autopilot') {
+      return [ordered]@{
+        applied = $true
+        mode = if ($Policy.prompt_surface_warn_docs_mode) { [string]$Policy.prompt_surface_warn_docs_mode } else { 'docs-lite' }
+        reason = 'Prompt surface is already wide; use the lightest docs/autopilot route first.'
+      }
     }
-  }
 
-  if ($BucketSurface -and $BucketSurface.preferred_execution_mode) {
-    return [ordered]@{
-      mode = [string]$BucketSurface.preferred_execution_mode
-      reason = [string]$BucketSurface.execution_mode_reason
-    }
-  }
-
-  if ($Bucket -eq 'qa-editor' -or $Bucket -eq 'editmode-tests') {
-    return [ordered]@{
-      mode = 'relay-dad'
-      reason = 'QA and editor slices usually benefit from peer verification and tool coordination.'
+    if (-not ($keepRelayBuckets -contains $Bucket)) {
+      return [ordered]@{
+        applied = $true
+        mode = if ($Policy.prompt_surface_warn_default_mode) { [string]$Policy.prompt_surface_warn_default_mode } else { 'direct-codex' }
+        reason = 'Prompt surface is already wide; shrink the slice before another relay run.'
+      }
     }
   }
 
   return [ordered]@{
+    applied = $false
+    mode = $DefaultMode
+    reason = $DefaultReason
+  }
+}
+
+function Get-ExecutionModeGuidance {
+  param(
+    [string]$Bucket,
+    $BucketSurface,
+    $BucketHeuristic,
+    $SecurityPosture,
+    $PromptSurface,
+    $RoutePosturePolicy
+  )
+
+  if ($Bucket -eq 'docs-or-autopilot') {
+    $baseGuidance = [ordered]@{
+      mode = 'docs-lite'
+      reason = 'Docs and autopilot maintenance usually do not need full DAD; start with the lightest prompt/profile.'
+    }
+    return Get-RoutePostureGuardrail -Bucket $Bucket -DefaultMode $baseGuidance.mode -DefaultReason $baseGuidance.reason -SecurityPosture $SecurityPosture -PromptSurface $PromptSurface -Policy $RoutePosturePolicy
+  }
+
+  if ($BucketHeuristic -and $BucketHeuristic.preferred_execution_mode -and $BucketHeuristic.route_samples -ge 1) {
+    $baseGuidance = [ordered]@{
+      mode = [string]$BucketHeuristic.preferred_execution_mode
+      reason = "Learned from route/session history for bucket $Bucket across $($BucketHeuristic.route_samples) route sample(s)."
+    }
+    return Get-RoutePostureGuardrail -Bucket $Bucket -DefaultMode $baseGuidance.mode -DefaultReason $baseGuidance.reason -SecurityPosture $SecurityPosture -PromptSurface $PromptSurface -Policy $RoutePosturePolicy
+  }
+
+  if ($BucketSurface -and $BucketSurface.preferred_execution_mode) {
+    $baseGuidance = [ordered]@{
+      mode = [string]$BucketSurface.preferred_execution_mode
+      reason = [string]$BucketSurface.execution_mode_reason
+    }
+    return Get-RoutePostureGuardrail -Bucket $Bucket -DefaultMode $baseGuidance.mode -DefaultReason $baseGuidance.reason -SecurityPosture $SecurityPosture -PromptSurface $PromptSurface -Policy $RoutePosturePolicy
+  }
+
+  if ($Bucket -eq 'qa-editor' -or $Bucket -eq 'editmode-tests') {
+    $baseGuidance = [ordered]@{
+      mode = 'relay-dad'
+      reason = 'QA and editor slices usually benefit from peer verification and tool coordination.'
+    }
+    return Get-RoutePostureGuardrail -Bucket $Bucket -DefaultMode $baseGuidance.mode -DefaultReason $baseGuidance.reason -SecurityPosture $SecurityPosture -PromptSurface $PromptSurface -Policy $RoutePosturePolicy
+  }
+
+  $baseGuidance = [ordered]@{
     mode = 'direct-codex'
     reason = 'Default to the cheapest single-agent slice unless the task clearly crosses boundaries.'
   }
+  return Get-RoutePostureGuardrail -Bucket $Bucket -DefaultMode $baseGuidance.mode -DefaultReason $baseGuidance.reason -SecurityPosture $SecurityPosture -PromptSurface $PromptSurface -Policy $RoutePosturePolicy
 }
 
 function Get-SkillContract {
@@ -368,11 +458,14 @@ $skillContract = Get-SkillContract -ContractsPath $skillContractsPath -Bucket $b
 $skillPaths = Resolve-SkillPaths -SkillsRoot $skillsRoot -SkillNames $skillContract.required_skills
 $backlogHealth = Get-BacklogHealth -Path $BacklogHealthPath
 $contextSurface = Get-ContextSurface -Path $ContextSurfacePath
+$routePosturePolicy = Read-JsonFile -Path $routePosturePolicyPath
+$securityPosture = Read-JsonFile -Path $securityPosturePath
+$promptSurfaceStatus = Read-JsonFile -Path $promptSurfaceStatusPath
 $bucketSurface = $null
 if ($contextSurface -and $contextSurface.buckets) {
   $bucketSurface = $contextSurface.buckets | Where-Object { $_.bucket -eq $bucket } | Select-Object -First 1
 }
-$executionMode = Get-ExecutionModeGuidance -Bucket $bucket -BucketSurface $bucketSurface -BucketHeuristic $bucketHeuristic
+$executionMode = Get-ExecutionModeGuidance -Bucket $bucket -BucketSurface $bucketSurface -BucketHeuristic $bucketHeuristic -SecurityPosture $securityPosture -PromptSurface $promptSurfaceStatus -RoutePosturePolicy $routePosturePolicy
 $agentIdentityProfiles = Get-AgentIdentityProfiles -Bucket $bucket -ExecutionMode $executionMode.mode
 $approvedToolProfiles = Get-ApprovedToolProfiles -Bucket $bucket -ExecutionMode $executionMode.mode
 $activePolicyProfiles = @('cardgame-compact-artifacts-only', 'cardgame-no-full-log-tail')
@@ -452,12 +545,19 @@ $manifest = [ordered]@{
       'active_policy_ids must resolve through the central policy registry before the slice is trusted'
     )
     verification_expectation = 'Use the narrowest compile/test/Unity QA path that can close this slice.'
-    token_policy = 'Reuse stable prefix, keep one narrow slice, avoid broad repo search.'
+    token_policy = if ($executionMode.applied) { 'Previous compact posture warned about cost or risk; keep the next slice narrower than usual and prefer compact artifacts before another relay cycle.' } else { 'Reuse stable prefix, keep one narrow slice, avoid broad repo search.' }
     agent_identity_profiles = @($agentIdentityProfiles)
     agent_identity_policy = 'Every autopilot, relay, route, and Unity-MCP role must resolve to a distinct registered identity before the slice is trusted.'
     tool_registry_policy = 'Every active runtime, script runner, relay peer, and Unity MCP bridge must resolve to a centrally registered approved tool before execution continues.'
     policy_registry_policy = 'Every active compact-policy contract must resolve to a centrally registered policy before the slice is trusted.'
     execution_mode = $executionMode
+    posture_guardrail = [ordered]@{
+      applied = [bool]$executionMode.applied
+      previous_security_posture_risk = if ($securityPosture) { [string]$securityPosture.risk } else { '' }
+      previous_security_posture_reason = if ($securityPosture) { [string]$securityPosture.reason } else { '' }
+      previous_prompt_surface_status = if ($promptSurfaceStatus) { [string]$promptSurfaceStatus.status } else { '' }
+      policy_path = $routePosturePolicyPath
+    }
     admission_warnings = @($admissionWarnings)
     backlog_health = if ($backlogHealth) {
       [ordered]@{
