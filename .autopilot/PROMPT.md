@@ -375,6 +375,17 @@ Tasks:
 LAST_HALT_NOTE (NOT a HALT file — this is a mutable rule, not an
 IMMUTABLE:halt condition).
 
+### Streak-collapse (no-delta suppression)
+
+When an idle-upkeep iter produced no state delta (no PR change, no new
+finding, no metric delta, no operator directive), do NOT append a new
+HISTORY.md row or new operator-dashboard row. Instead, locate the existing
+`(streak: idle-upkeep × N since iterM — no delta)` line and bump N by 1.
+If no such line exists yet, write one fresh line and do not emit anything
+else for that iter. METRICS.jsonl is still appended (it is the raw
+wake-up ledger); HISTORY and the dashboard are operator-facing surfaces
+whose job is to surface change, not prove the loop woke up.
+
 ### Post-MVP idle halt (added 2026-04-19)
 
 When `status: post-mvp-idle` in STATE.md **and** `idle_upkeep_streak >= 5`:
