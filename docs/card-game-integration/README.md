@@ -54,6 +54,10 @@ call when a task needs Codex <-> Claude peer turns.
   - updates heuristics and writes terminal relay results back into `.autopilot`
 - `scripts/card-game/Get-CardGameRelaySignal.ps1`
   - reads the compact relay live-signal artifact without opening the full JSONL log
+- `scripts/card-game/Get-CardGameManagerSignal.ps1`
+  - merges relay liveness plus loop status into one compact manager signal so Desktop/autopilot can see death, wait-stop, and next action without reading multiple artifacts
+- `scripts/card-game/Watch-RelaySignalLiveness.ps1`
+  - detached watcher that rewrites live signals to `Stale` if the Desktop relay process disappears unexpectedly, then refreshes the manager signal artifact
 - `scripts/card-game/Wait-CardGameRelaySignal.ps1`
   - waits for a compact relay done marker with a hard timeout so operators do not wait forever
 - `scripts/card-game/Run-CardGameManagedRelay.ps1`
@@ -100,11 +104,13 @@ work together without reading large logs.
    `powershell -ExecutionPolicy Bypass -File scripts/card-game/Run-CardGameManagedRelay.ps1 -TaskSlug companion-depth-first-slice -Turns 2 -ForceRelay`
 2. Read the compact live signal only:
    `powershell -ExecutionPolicy Bypass -File scripts/card-game/Get-CardGameRelaySignal.ps1`
-3. Wait for a bounded completion signal instead of tailing logs forever:
+3. Read the compact manager signal only:
+   `powershell -ExecutionPolicy Bypass -File scripts/card-game/Get-CardGameManagerSignal.ps1`
+4. Wait for a bounded completion signal instead of tailing logs forever:
    `powershell -ExecutionPolicy Bypass -File scripts/card-game/Wait-CardGameRelaySignal.ps1 -TimeoutSeconds 1800`
-4. Full autopilot-driven preparation/execution path:
+5. Full autopilot-driven preparation/execution path:
    `powershell -ExecutionPolicy Bypass -File scripts/card-game/Invoke-CardGameAutopilotLoop.ps1 -ForceRelay`
-5. When the relay reaches a terminal session, integrate it back into the card-game autopilot:
+6. When the relay reaches a terminal session, integrate it back into the card-game autopilot:
    `powershell -ExecutionPolicy Bypass -File scripts/card-game/Complete-CardGameRelaySession.ps1`
 
 Relay live signal artifacts are mirrored into:
@@ -112,12 +118,54 @@ Relay live signal artifacts are mirrored into:
 - `%LocalAppData%\CodexClaudeRelayMvp\auto-logs\relay-live-signal.txt`
 - `D:\Unity\card game\.autopilot\generated\relay-live-signal.json`
 - `D:\Unity\card game\.autopilot\generated\relay-live-signal.txt`
+- `D:\Unity\card game\.autopilot\generated\relay-manager-signal.json`
+- `D:\Unity\card game\.autopilot\generated\relay-manager-signal.txt`
 
 The text signal always starts with these sentinel lines:
 - `[RELAY_SIGNAL] ...`
 - `[RELAY_DONE] true|false ...`
 
 These are the only lines an LLM or operator needs to read for routine status checks.
+
+## Codex Desktop Only Path
+
+If the administrator wants one visible operator surface, use the relay desktop
+UI instead of manual PowerShell.
+
+1. Launch `CodexClaudeRelay.Desktop`.
+2. Fill or keep the defaults for:
+   `Managed CardGame Root`, `Managed Task Slug`, `Managed Turns`.
+3. Click `Managed CardGame Run`.
+4. For backlog/decision-driven execution from the same UI, click `Managed Autopilot Run`.
+5. Read only the compact markers in the status mirror:
+   `D:\Unity\card game\.autopilot\generated\relay-live-signal.txt`
+6. If the relay dies, read:
+   `D:\Unity\card game\.autopilot\generated\relay-manager-signal.txt`
+
+What this button does:
+- prepares the next card-game relay slice through `Start-CardGameRelay.ps1 -PrepareOnly`
+- loads the generated session id + prompt into the desktop app automatically
+- starts the relay in the current desktop instance
+- runs only the bounded turn batch requested in `Managed Turns`
+- pauses intentionally after success so the operator never waits forever
+
+What `Managed Autopilot Run` adds:
+- refreshes backlog health plus loop status first
+- respects route/blocked/halt outcomes instead of blindly starting DAD every time
+- starts relay only when the loop resolver says the next action is `run`
+- writes one manager-level signal artifact so the operator can see `relay_dead`, `route_only`, `prepare_next`, `blocked`, or `halted`
+
+Stale signal handling:
+- every live signal now carries `source_pid`, `source_process_started_at`, and `heartbeat_at`
+- if the desktop process is gone, the detached watcher rewrites the artifact to `status=Stale` immediately; startup/read paths still keep a second normalization pass as fallback
+- loop status treats `Stale` as `prepare a fresh session`, not `keep waiting`
+- manager signal turns that into one compact operator state such as `relay_dead` with `suggested action: prepare_fresh_session`
+- Desktop itself now shows only an event-log tail in the main surface so routine operation does not require reading the full JSONL log
+
+If the administrator wants to stay inside Codex Desktop only, the working rule
+should be one repeated manager prompt:
+
+`Use D:\cardgame-dad-relay as the relay operator for D:\Unity\card game. Never tail full logs. Read only relay-live-signal.txt/json markers, fix stale signals before waiting, and use the Managed CardGame Run path for bounded sessions.`
 
 ## How This Differs From The Old Autopilot Loop
 

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Threading;
 using System.Windows.Media;
@@ -32,7 +33,10 @@ public partial class MainWindow : Window
     private bool _isBusy;
     private RelayPendingApproval? _livePendingApproval;
     private TaskCompletionSource<RelayApprovalDecision>? _pendingApprovalDecisionSource;
+    private string? _currentAdmissionManifestPath;
     private bool _suppressUiSettingCallbacks;
+    private readonly DispatcherTimer _statusRefreshTimer;
+    private string? _relaySignalWatcherKey;
 
     public MainWindow()
     {
@@ -44,6 +48,12 @@ public partial class MainWindow : Window
 
         Directory.CreateDirectory(_appDataDirectory);
 
+        _statusRefreshTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(5)
+        };
+        _statusRefreshTimer.Tick += StatusRefreshTimer_Tick;
+
         UseInteractiveAdaptersCheckBox.Checked += UseInteractiveAdaptersCheckBox_Changed;
         UseInteractiveAdaptersCheckBox.Unchecked += UseInteractiveAdaptersCheckBox_Changed;
         AutoApproveAllRequestsCheckBox.Checked += AutoApproveAllRequestsCheckBox_Changed;
@@ -51,6 +61,9 @@ public partial class MainWindow : Window
         SessionIdTextBox.TextChanged += PersistUiSettingsTextChanged;
         InitialPromptTextBox.TextChanged += PersistUiSettingsTextChanged;
         WorkingDirectoryTextBox.TextChanged += PersistUiSettingsTextChanged;
+        ManagedCardGameRootTextBox.TextChanged += PersistUiSettingsTextChanged;
+        ManagedTaskSlugTextBox.TextChanged += PersistUiSettingsTextChanged;
+        ManagedTurnsTextBox.TextChanged += PersistUiSettingsTextChanged;
         Loaded += MainWindow_Loaded;
         Closed += MainWindow_Closed;
     }
@@ -58,6 +71,7 @@ public partial class MainWindow : Window
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         LoadUiSettings();
+        NormalizeStaleRelaySignalsOnStartup();
         await EnsureBrokerAsync(CancellationToken.None);
         if (string.IsNullOrWhiteSpace(SessionIdTextBox.Text))
         {
@@ -68,7 +82,9 @@ public partial class MainWindow : Window
         {
             InitialPromptTextBox.Text = "Read PROJECT-RULES.md first. Start the relay session.";
         }
+        _statusRefreshTimer.Start();
         await RefreshAdapterStatusAsync();
+        await RefreshManagedStatusAsync(CancellationToken.None);
         RefreshUi();
         SaveUiSettings();
     }
@@ -123,8 +139,20 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Closed(object? sender, EventArgs e)
     {
+        _statusRefreshTimer.Stop();
         SaveUiSettings();
+        MarkLiveRelaySignalAsClosed();
         await DisposeOwnedDisposablesAsync(CancellationToken.None);
+    }
+
+    private void StatusRefreshTimer_Tick(object? sender, EventArgs e)
+    {
+        if (_broker is null)
+        {
+            return;
+        }
+
+        RefreshUi();
     }
 
     private async void StartSessionButton_Click(object sender, RoutedEventArgs e)
@@ -163,6 +191,98 @@ public partial class MainWindow : Window
             busyMessage: "Running one relay cycle...",
             successPauseReason: "Paused intentionally after one successful relay cycle.",
             successStatusMessage: "One relay cycle completed successfully. Session paused intentionally.");
+    }
+
+    private async void RunManagedCardGameButton_Click(object sender, RoutedEventArgs e)
+    {
+        await RunOperationAsync("Preparing and running a managed card-game relay slice...", async () =>
+        {
+            var managedCardGameRoot = string.IsNullOrWhiteSpace(ManagedCardGameRootTextBox.Text)
+                ? @"D:\Unity\card game"
+                : ManagedCardGameRootTextBox.Text.Trim();
+            var managedTaskSlug = ManagedTaskSlugTextBox.Text?.Trim() ?? string.Empty;
+            var turns = ParseManagedTurns();
+
+            var prepared = await PrepareManagedCardGameSessionAsync(managedCardGameRoot, managedTaskSlug, CancellationToken.None);
+            WorkingDirectoryTextBox.Text = managedCardGameRoot;
+            SessionIdTextBox.Text = prepared.SessionId;
+            InitialPromptTextBox.Text = prepared.Prompt;
+            await EnsureBrokerAsync(CancellationToken.None, recreate: true);
+            await EnsureAdaptersReadyForSessionAsync();
+
+            await _broker!.StartSessionAsync(
+                prepared.SessionId,
+                AgentRole.Codex,
+                prepared.Prompt,
+                TryLoadSessionBootstrap(),
+                CancellationToken.None);
+
+            await RunTurnBatchCoreAsync(
+                turns,
+                successPauseReason: turns == 2
+                    ? "Paused intentionally after one successful relay cycle."
+                    : $"Paused intentionally after {turns} managed relay turns.",
+                successStatusMessage: turns == 2
+                    ? "Managed card-game relay completed one cycle and paused intentionally."
+                    : $"Managed card-game relay completed {turns} turns and paused intentionally.");
+            await RefreshManagedStatusAsync(CancellationToken.None);
+        });
+    }
+
+    private async void RunManagedAutopilotButton_Click(object sender, RoutedEventArgs e)
+    {
+        await RunOperationAsync("Preparing and running an autopilot-managed relay slice...", async () =>
+        {
+            var managedCardGameRoot = string.IsNullOrWhiteSpace(ManagedCardGameRootTextBox.Text)
+                ? @"D:\Unity\card game"
+                : ManagedCardGameRootTextBox.Text.Trim();
+            var turns = ParseManagedTurns();
+
+            var autopilotPreparation = await PrepareManagedAutopilotSessionAsync(managedCardGameRoot, CancellationToken.None);
+            await RefreshManagedStatusAsync(CancellationToken.None);
+
+            if (!autopilotPreparation.ShouldStartRelay)
+            {
+                StatusMessageTextBlock.Text = autopilotPreparation.StatusMessage;
+                return;
+            }
+
+            var prepared = await LoadPreparedManagedSessionAsync(CancellationToken.None);
+            WorkingDirectoryTextBox.Text = managedCardGameRoot;
+            SessionIdTextBox.Text = prepared.SessionId;
+            InitialPromptTextBox.Text = prepared.Prompt;
+            _currentAdmissionManifestPath = prepared.ManifestPath;
+            SaveUiSettings();
+
+            await EnsureBrokerAsync(CancellationToken.None, recreate: true);
+            await EnsureAdaptersReadyForSessionAsync();
+
+            await _broker!.StartSessionAsync(
+                prepared.SessionId,
+                AgentRole.Codex,
+                prepared.Prompt,
+                TryLoadSessionBootstrap(),
+                CancellationToken.None);
+
+            await RunTurnBatchCoreAsync(
+                turns,
+                successPauseReason: turns == 2
+                    ? "Paused intentionally after one successful relay cycle."
+                    : $"Paused intentionally after {turns} managed relay turns.",
+                successStatusMessage: turns == 2
+                    ? "Managed autopilot relay completed one cycle and paused intentionally."
+                    : $"Managed autopilot relay completed {turns} turns and paused intentionally.");
+            await RefreshManagedStatusAsync(CancellationToken.None);
+        });
+    }
+
+    private async void RefreshManagedStatusButton_Click(object sender, RoutedEventArgs e)
+    {
+        await RunOperationAsync("Refreshing managed autopilot status...", async () =>
+        {
+            await RefreshManagedStatusAsync(CancellationToken.None);
+            StatusMessageTextBlock.Text = "Managed autopilot status refreshed.";
+        });
     }
 
     private async void CheckAdaptersButton_Click(object sender, RoutedEventArgs e)
@@ -319,38 +439,44 @@ public partial class MainWindow : Window
         string successStatusMessage)
     {
         await RunOperationAsync(busyMessage, async () =>
+            await RunTurnBatchCoreAsync(turns, successPauseReason, successStatusMessage));
+    }
+
+    private async Task RunTurnBatchCoreAsync(
+        int turns,
+        string successPauseReason,
+        string successStatusMessage)
+    {
+        for (var i = 0; i < turns; i++)
         {
-            for (var i = 0; i < turns; i++)
+            if (_broker is null)
             {
-                if (_broker is null)
-                {
-                    StatusMessageTextBlock.Text = "Broker is not initialized.";
-                    return;
-                }
-
-                var turnNumber = i + 1;
-                SetBusyState(true, $"Running turn {turnNumber} of {turns} on {_broker.State.ActiveAgent}...");
-                StatusMessageTextBlock.Text = $"Running turn {turnNumber} of {turns} on {_broker.State.ActiveAgent}...";
-                RefreshUi();
-                await YieldToUiAsync();
-                var result = await _broker.AdvanceAsync(CancellationToken.None);
-                StatusMessageTextBlock.Text = result.Message;
-                RefreshUi();
-
-                if (!result.Succeeded)
-                {
-                    SetBusyState(true, $"Run stopped on turn {turnNumber}. Final status: {result.Message}");
-                    return;
-                }
+                StatusMessageTextBlock.Text = "Broker is not initialized.";
+                return;
             }
 
-            if (_broker is not null)
+            var turnNumber = i + 1;
+            SetBusyState(true, $"Running turn {turnNumber} of {turns} on {_broker.State.ActiveAgent}...");
+            StatusMessageTextBlock.Text = $"Running turn {turnNumber} of {turns} on {_broker.State.ActiveAgent}...";
+            RefreshUi();
+            await YieldToUiAsync();
+            var result = await _broker.AdvanceAsync(CancellationToken.None);
+            StatusMessageTextBlock.Text = result.Message;
+            RefreshUi();
+
+            if (!result.Succeeded)
             {
-                await _broker.PauseAsync(successPauseReason, CancellationToken.None);
-                StatusMessageTextBlock.Text = successStatusMessage;
-                RefreshUi();
+                SetBusyState(true, $"Run stopped on turn {turnNumber}. Final status: {result.Message}");
+                return;
             }
-        });
+        }
+
+        if (_broker is not null)
+        {
+            await _broker.PauseAsync(successPauseReason, CancellationToken.None);
+            StatusMessageTextBlock.Text = successStatusMessage;
+            RefreshUi();
+        }
     }
 
     private async Task RunOperationAsync(string busyMessage, Func<Task> operation)
@@ -457,9 +583,7 @@ public partial class MainWindow : Window
         CurrentSessionRiskSummaryTextBox.Text = BuildCurrentSessionRiskSummary(state, activePendingApproval, IsAutoApproveAllRequestsEnabled());
         SessionApprovalRulesTextBox.Text = BuildSessionApprovalRulesSummary(state, activePendingApproval);
         RecentEventsTextBox.Text = BuildRecentEventsSummary(logPath);
-        EventLogTextBox.Text = File.Exists(logPath)
-            ? File.ReadAllText(logPath)
-            : "No event log written yet.";
+        EventLogTextBox.Text = BuildEventLogTailSummary(logPath);
         ApplyVisualStates();
         WriteAutomaticLogArtifacts();
     }
@@ -813,6 +937,9 @@ public partial class MainWindow : Window
         SmokeTestButton.IsEnabled = !_isBusy;
         AdvanceButton.IsEnabled = !_isBusy;
         RunCycleButton.IsEnabled = !_isBusy;
+        RunManagedCardGameButton.IsEnabled = !_isBusy;
+        RunManagedAutopilotButton.IsEnabled = !_isBusy;
+        RefreshManagedStatusButton.IsEnabled = !_isBusy;
         AutoRunButton.IsEnabled = !_isBusy;
         PauseButton.IsEnabled = !_isBusy;
         StopButton.IsEnabled = !_isBusy;
@@ -1134,6 +1261,26 @@ public partial class MainWindow : Window
         }
 
         return builder.ToString().TrimEnd();
+    }
+
+    private static string BuildEventLogTailSummary(string logPath, int maxLines = 80)
+    {
+        if (!File.Exists(logPath))
+        {
+            return "No event log written yet.";
+        }
+
+        var tailLines = File.ReadLines(logPath)
+            .Where(line => !string.IsNullOrWhiteSpace(line))
+            .TakeLast(maxLines)
+            .ToArray();
+
+        if (tailLines.Length == 0)
+        {
+            return "No event log written yet.";
+        }
+
+        return string.Join(Environment.NewLine, tailLines);
     }
 
     private static string BuildToolCategorySummary(string logPath)
@@ -1720,6 +1867,7 @@ public partial class MainWindow : Window
             var latestHandoffText = LatestHandoffTextBox.Text ?? "No handoff accepted yet.";
             File.WriteAllText(Path.Combine(autoLogDirectory, "latest-handoff.json"), latestHandoffText);
             MirrorRelaySignalToManagedWorkspace(signalJson, signalText);
+            EnsureRelaySignalWatcher();
         }
         catch
         {
@@ -1802,7 +1950,11 @@ public partial class MainWindow : Window
             ["last_error"] = _broker?.State.LastError ?? string.Empty,
             ["signal_marker"] = BuildRelaySignalMarker(now),
             ["done_marker"] = BuildRelayDoneMarker(),
-            ["event_log_path"] = _broker?.CurrentLogPath ?? string.Empty
+            ["event_log_path"] = _broker?.CurrentLogPath ?? string.Empty,
+            ["source_pid"] = Environment.ProcessId,
+            ["source_process_started_at"] = Process.GetCurrentProcess().StartTime.ToUniversalTime().ToString("O"),
+            ["heartbeat_at"] = now.ToString("O"),
+            ["heartbeat_max_age_seconds"] = 30
         };
 
         return JsonSerializer.Serialize(signal, DisplayJsonOptions);
@@ -1852,6 +2004,243 @@ public partial class MainWindow : Window
         Directory.CreateDirectory(autopilotGenerated);
         File.WriteAllText(Path.Combine(autopilotGenerated, "relay-live-signal.json"), signalJson);
         File.WriteAllText(Path.Combine(autopilotGenerated, "relay-live-signal.txt"), signalText);
+    }
+
+    private void EnsureRelaySignalWatcher()
+    {
+        if (_broker is null || _broker.State.Status != RelaySessionStatus.Active)
+        {
+            _relaySignalWatcherKey = null;
+            return;
+        }
+
+        var repoRoot = TryFindRelayRepositoryRoot();
+        if (string.IsNullOrWhiteSpace(repoRoot))
+        {
+            return;
+        }
+
+        var watcherScriptPath = Path.Combine(repoRoot, "scripts", "card-game", "Watch-RelaySignalLiveness.ps1");
+        if (!File.Exists(watcherScriptPath))
+        {
+            return;
+        }
+
+        var sessionKey = string.Join("|", new[]
+        {
+            _broker.State.SessionId ?? string.Empty,
+            Environment.ProcessId.ToString(),
+            Process.GetCurrentProcess().StartTime.ToUniversalTime().ToString("O"),
+        });
+
+        if (string.Equals(_relaySignalWatcherKey, sessionKey, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var primarySignalJsonPath = Path.Combine(_appDataDirectory, "auto-logs", "relay-live-signal.json");
+        var mirroredGeneratedDirectory = TryGetManagedWorkspaceGeneratedDirectory();
+        var mirroredSignalJsonPath = string.IsNullOrWhiteSpace(mirroredGeneratedDirectory)
+            ? string.Empty
+            : Path.Combine(mirroredGeneratedDirectory, "relay-live-signal.json");
+        var managedCardGameRoot = string.IsNullOrWhiteSpace(ManagedCardGameRootTextBox.Text)
+            ? @"D:\Unity\card game"
+            : ManagedCardGameRootTextBox.Text.Trim();
+
+        var arguments = string.Join(' ', new[]
+        {
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            QuotePowerShellArgument(watcherScriptPath),
+            "-PrimarySignalJsonPath",
+            QuotePowerShellArgument(primarySignalJsonPath),
+            "-MirroredSignalJsonPath",
+            QuotePowerShellArgument(mirroredSignalJsonPath),
+            "-SourcePid",
+            Environment.ProcessId.ToString(),
+            "-SourceProcessStartedAt",
+            QuotePowerShellArgument(Process.GetCurrentProcess().StartTime.ToUniversalTime().ToString("O")),
+            "-CardGameRoot",
+            QuotePowerShellArgument(managedCardGameRoot)
+        });
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "powershell",
+            Arguments = arguments,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WorkingDirectory = repoRoot,
+        };
+
+        Process.Start(startInfo);
+        _relaySignalWatcherKey = sessionKey;
+    }
+
+    private void NormalizeStaleRelaySignalsOnStartup()
+    {
+        try
+        {
+            NormalizeSignalFileIfStale(Path.Combine(_appDataDirectory, "auto-logs", "relay-live-signal.json"));
+
+            var managedRoot = string.IsNullOrWhiteSpace(ManagedCardGameRootTextBox.Text)
+                ? @"D:\Unity\card game"
+                : ManagedCardGameRootTextBox.Text.Trim();
+            NormalizeSignalFileIfStale(Path.Combine(managedRoot, ".autopilot", "generated", "relay-live-signal.json"));
+        }
+        catch
+        {
+            // Best-effort only. Stale signal cleanup must never block app startup.
+        }
+    }
+
+    private void NormalizeSignalFileIfStale(string signalPath)
+    {
+        if (!File.Exists(signalPath))
+        {
+            return;
+        }
+
+        var signalNode = JsonNode.Parse(File.ReadAllText(signalPath)) as JsonObject;
+        if (signalNode is null)
+        {
+            return;
+        }
+
+        var status = signalNode["status"]?.GetValue<string>() ?? string.Empty;
+        if (!string.Equals(status, RelaySessionStatus.Active.ToString(), StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var sourcePid = signalNode["source_pid"]?.GetValue<int>() ?? 0;
+        var sourceProcessStartedAt = signalNode["source_process_started_at"]?.GetValue<string>() ?? string.Empty;
+        if (IsRelayProcessRecordLive(sourcePid, sourceProcessStartedAt))
+        {
+            return;
+        }
+
+        WriteSignalOverrideArtifacts(
+            signalPath,
+            signalNode["session_id"]?.GetValue<string>() ?? string.Empty,
+            "Stale",
+            isTerminal: true,
+            signalNode["active_role"]?.GetValue<string>() ?? "(none)",
+            signalNode["current_turn"]?.GetValue<int>() ?? 0,
+            signalNode["last_progress_at"]?.GetValue<string>() ?? DateTimeOffset.Now.ToString("O"),
+            "relay_process_missing");
+    }
+
+    private void MarkLiveRelaySignalAsClosed()
+    {
+        try
+        {
+            if (_broker is null || _broker.State.Status != RelaySessionStatus.Active)
+            {
+                return;
+            }
+
+            var signalJsonPath = Path.Combine(_appDataDirectory, "auto-logs", "relay-live-signal.json");
+            WriteSignalOverrideArtifacts(
+                signalJsonPath,
+                _broker.State.SessionId,
+                RelaySessionStatus.Stopped.ToString(),
+                isTerminal: true,
+                _broker.State.ActiveAgent,
+                _broker.State.CurrentTurn,
+                _broker.State.UpdatedAt.ToString("O"),
+                "desktop_closed");
+
+            var managedGeneratedDirectory = TryGetManagedWorkspaceGeneratedDirectory();
+            if (!string.IsNullOrWhiteSpace(managedGeneratedDirectory))
+            {
+                WriteSignalOverrideArtifacts(
+                    Path.Combine(managedGeneratedDirectory, "relay-live-signal.json"),
+                    _broker.State.SessionId,
+                    RelaySessionStatus.Stopped.ToString(),
+                    isTerminal: true,
+                    _broker.State.ActiveAgent,
+                    _broker.State.CurrentTurn,
+                    _broker.State.UpdatedAt.ToString("O"),
+                    "desktop_closed");
+            }
+        }
+        catch
+        {
+            // Best-effort only. Closing should not fail because signal rewrite failed.
+        }
+    }
+
+    private void WriteSignalOverrideArtifacts(
+        string signalJsonPath,
+        string sessionId,
+        string status,
+        bool isTerminal,
+        string activeRole,
+        int currentTurn,
+        string lastProgressAt,
+        string reason)
+    {
+        var generatedAt = DateTimeOffset.Now;
+        var signalJson = JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["generated_at"] = generatedAt.ToString("O"),
+            ["session_id"] = sessionId,
+            ["status"] = status,
+            ["is_terminal"] = isTerminal,
+            ["active_role"] = activeRole,
+            ["current_turn"] = currentTurn,
+            ["last_progress_at"] = lastProgressAt,
+            ["last_progress_age_seconds"] = 0,
+            ["watchdog_remaining_seconds"] = 0,
+            ["pending_approval_count"] = 0,
+            ["pending_approval"] = string.Empty,
+            ["last_error"] = reason,
+            ["signal_marker"] = $"[RELAY_SIGNAL] status={status.ToLowerInvariant()} session={(string.IsNullOrWhiteSpace(sessionId) ? "(none)" : sessionId)} turn={currentTurn} role={activeRole} progress_age=00:00 watchdog=disabled approvals=0",
+            ["done_marker"] = $"[RELAY_DONE] {(isTerminal ? "true" : "false")} status={status.ToLowerInvariant()} reason={reason}",
+            ["event_log_path"] = _broker?.CurrentLogPath ?? string.Empty,
+            ["source_pid"] = Environment.ProcessId,
+            ["source_process_started_at"] = Process.GetCurrentProcess().StartTime.ToUniversalTime().ToString("O"),
+            ["heartbeat_at"] = generatedAt.ToString("O"),
+            ["heartbeat_max_age_seconds"] = 30,
+        }, DisplayJsonOptions);
+        var signalText = string.Join(Environment.NewLine, new[]
+        {
+            $"[RELAY_SIGNAL] status={status.ToLowerInvariant()} session={(string.IsNullOrWhiteSpace(sessionId) ? "(none)" : sessionId)} turn={currentTurn} role={activeRole} progress_age=00:00 watchdog=disabled approvals=0",
+            $"[RELAY_DONE] {(isTerminal ? "true" : "false")} status={status.ToLowerInvariant()} reason={reason}",
+            string.Empty,
+        });
+
+        var signalDirectory = Path.GetDirectoryName(signalJsonPath);
+        if (!string.IsNullOrWhiteSpace(signalDirectory))
+        {
+            Directory.CreateDirectory(signalDirectory);
+        }
+
+        File.WriteAllText(signalJsonPath, signalJson);
+        File.WriteAllText(Path.ChangeExtension(signalJsonPath, ".txt"), signalText);
+    }
+
+    private static bool IsRelayProcessRecordLive(int pid, string processStartedAt)
+    {
+        if (pid <= 0 || string.IsNullOrWhiteSpace(processStartedAt))
+        {
+            return false;
+        }
+
+        try
+        {
+            var process = Process.GetProcessById(pid);
+            return string.Equals(
+                process.StartTime.ToUniversalTime().ToString("O"),
+                processStartedAt,
+                StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private string? TryGetManagedWorkspaceGeneratedDirectory()
@@ -2053,6 +2442,250 @@ public partial class MainWindow : Window
         _ownedDisposables.Clear();
     }
 
+    private int ParseManagedTurns()
+    {
+        if (int.TryParse(ManagedTurnsTextBox.Text?.Trim(), out var turns) && turns >= 2)
+        {
+            return Math.Min(turns, 12);
+        }
+
+        return 2;
+    }
+
+    private async Task<ManagedCardGamePreparation> PrepareManagedCardGameSessionAsync(
+        string cardGameRoot,
+        string taskSlug,
+        CancellationToken cancellationToken)
+    {
+        var repoRoot = TryFindRelayRepositoryRoot()
+            ?? throw new InvalidOperationException("Could not locate the relay repository root from the desktop app.");
+        var scriptPath = Path.Combine(repoRoot, "scripts", "card-game", "Start-CardGameRelay.ps1");
+        if (!File.Exists(scriptPath))
+        {
+            throw new FileNotFoundException("Managed card-game starter script was not found.", scriptPath);
+        }
+
+        var manifestPath = Path.Combine(repoRoot, "profiles", "card-game", "generated-admission.json");
+        var promptPath = Path.Combine(repoRoot, "profiles", "card-game", "generated-session-prompt.md");
+
+        var arguments = new List<string>
+        {
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            QuotePowerShellArgument(scriptPath),
+            "-CardGameRoot",
+            QuotePowerShellArgument(cardGameRoot),
+            "-PrepareOnly",
+            "-ForceRelay"
+        };
+
+        if (!string.IsNullOrWhiteSpace(taskSlug))
+        {
+            arguments.Add("-TaskSlug");
+            arguments.Add(QuotePowerShellArgument(taskSlug));
+        }
+
+        var preparationResult = await RunPowerShellProcessAsync(string.Join(' ', arguments), cancellationToken);
+        if (preparationResult.ExitCode != 0)
+        {
+            throw new InvalidOperationException(string.IsNullOrWhiteSpace(preparationResult.ErrorText)
+                ? "Managed card-game preparation failed."
+                : preparationResult.ErrorText);
+        }
+
+        if (!File.Exists(manifestPath) || !File.Exists(promptPath))
+        {
+            throw new InvalidOperationException("Managed card-game preparation did not produce the expected manifest/prompt artifacts.");
+        }
+
+        using var manifestDocument = JsonDocument.Parse(await File.ReadAllTextAsync(manifestPath, cancellationToken));
+        var sessionId = manifestDocument.RootElement.TryGetProperty("session_id", out var sessionIdElement)
+            ? sessionIdElement.GetString()
+            : null;
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            throw new InvalidOperationException("Prepared card-game manifest does not contain a session id.");
+        }
+
+        _currentAdmissionManifestPath = manifestPath;
+        SaveUiSettings();
+
+        return new ManagedCardGamePreparation(
+            sessionId.Trim(),
+            await File.ReadAllTextAsync(promptPath, cancellationToken),
+            manifestPath);
+    }
+
+    private async Task<ManagedAutopilotPreparation> PrepareManagedAutopilotSessionAsync(
+        string cardGameRoot,
+        CancellationToken cancellationToken)
+    {
+        var repoRoot = TryFindRelayRepositoryRoot()
+            ?? throw new InvalidOperationException("Could not locate the relay repository root from the desktop app.");
+        var scriptPath = Path.Combine(repoRoot, "scripts", "card-game", "Invoke-CardGameAutopilotLoop.ps1");
+        if (!File.Exists(scriptPath))
+        {
+            throw new FileNotFoundException("Managed autopilot script was not found.", scriptPath);
+        }
+
+        var arguments = string.Join(' ', new[]
+        {
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            QuotePowerShellArgument(scriptPath),
+            "-CardGameRoot",
+            QuotePowerShellArgument(cardGameRoot),
+            "-PrepareOnly",
+            "-MaxSessions",
+            "1"
+        });
+
+        var preparationResult = await RunPowerShellProcessAsync(arguments, cancellationToken);
+        if (preparationResult.ExitCode != 0)
+        {
+            throw new InvalidOperationException(string.IsNullOrWhiteSpace(preparationResult.ErrorText)
+                ? "Managed autopilot preparation failed."
+                : preparationResult.ErrorText);
+        }
+
+        var managerSignal = await LoadManagerSignalAsync(cardGameRoot, cancellationToken);
+        var suggestedAction = managerSignal?.SuggestedDesktopAction ?? "prepare_autopilot";
+        var statusMessage = managerSignal is null
+            ? "Managed autopilot preparation completed, but no manager signal was produced."
+            : $"{managerSignal.OverallStatus}: {managerSignal.Reason}. Suggested action: {managerSignal.SuggestedDesktopAction}.";
+
+        return new ManagedAutopilotPreparation(
+            string.Equals(suggestedAction, "run_relay_session", StringComparison.OrdinalIgnoreCase),
+            statusMessage);
+    }
+
+    private async Task<ManagedCardGamePreparation> LoadPreparedManagedSessionAsync(CancellationToken cancellationToken)
+    {
+        var repoRoot = TryFindRelayRepositoryRoot()
+            ?? throw new InvalidOperationException("Could not locate the relay repository root from the desktop app.");
+        var manifestPath = Path.Combine(repoRoot, "profiles", "card-game", "generated-admission.json");
+        var promptPath = Path.Combine(repoRoot, "profiles", "card-game", "generated-session-prompt.md");
+        if (!File.Exists(manifestPath) || !File.Exists(promptPath))
+        {
+            throw new InvalidOperationException("Prepared card-game artifacts are missing. Run managed preparation first.");
+        }
+
+        using var manifestDocument = JsonDocument.Parse(await File.ReadAllTextAsync(manifestPath, cancellationToken));
+        var sessionId = manifestDocument.RootElement.TryGetProperty("session_id", out var sessionIdElement)
+            ? sessionIdElement.GetString()
+            : null;
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            throw new InvalidOperationException("Prepared card-game manifest does not contain a session id.");
+        }
+
+        _currentAdmissionManifestPath = manifestPath;
+        SaveUiSettings();
+
+        return new ManagedCardGamePreparation(
+            sessionId.Trim(),
+            await File.ReadAllTextAsync(promptPath, cancellationToken),
+            manifestPath);
+    }
+
+    private async Task RefreshManagedStatusAsync(CancellationToken cancellationToken)
+    {
+        var cardGameRoot = string.IsNullOrWhiteSpace(ManagedCardGameRootTextBox.Text)
+            ? @"D:\Unity\card game"
+            : ManagedCardGameRootTextBox.Text.Trim();
+        var managerSignal = await LoadManagerSignalAsync(cardGameRoot, cancellationToken);
+
+        ManagedStatusTextBox.Text = managerSignal is null
+            ? "Managed status not available."
+            : $"Overall: {managerSignal.OverallStatus}{Environment.NewLine}" +
+              $"Reason: {managerSignal.Reason}{Environment.NewLine}" +
+              $"Next action: {managerSignal.NextAction}{Environment.NewLine}" +
+              $"Task slug: {managerSignal.ResolvedTaskSlug}{Environment.NewLine}" +
+              $"Session: {managerSignal.SessionId}{Environment.NewLine}" +
+              $"Relay status: {managerSignal.RelayStatus}{Environment.NewLine}" +
+              $"Suggested action: {managerSignal.SuggestedDesktopAction}{Environment.NewLine}" +
+              $"Wait should end: {managerSignal.WaitShouldEnd}{Environment.NewLine}" +
+              $"Attention required: {managerSignal.AttentionRequired}{Environment.NewLine}" +
+              $"Marker: {managerSignal.ManagerSignalMarker}{Environment.NewLine}" +
+              $"Done: {managerSignal.ManagerDoneMarker}";
+    }
+
+    private async Task<ManagerSignalSummary?> LoadManagerSignalAsync(string cardGameRoot, CancellationToken cancellationToken)
+    {
+        var repoRoot = TryFindRelayRepositoryRoot()
+            ?? throw new InvalidOperationException("Could not locate the relay repository root from the desktop app.");
+        var scriptPath = Path.Combine(repoRoot, "scripts", "card-game", "Get-CardGameManagerSignal.ps1");
+        if (!File.Exists(scriptPath))
+        {
+            return null;
+        }
+
+        var arguments = string.Join(' ', new[]
+        {
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            QuotePowerShellArgument(scriptPath),
+            "-CardGameRoot",
+            QuotePowerShellArgument(cardGameRoot)
+        });
+
+        var result = await RunPowerShellProcessAsync(arguments, cancellationToken);
+        if (result.ExitCode != 0 || string.IsNullOrWhiteSpace(result.OutputText))
+        {
+            return null;
+        }
+
+        return JsonSerializer.Deserialize<ManagerSignalSummary>(result.OutputText, HandoffJson.SerializerOptions);
+    }
+
+    private async Task<ProcessRunResult> RunPowerShellProcessAsync(string arguments, CancellationToken cancellationToken)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "powershell",
+            Arguments = arguments,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WorkingDirectory = TryFindRelayRepositoryRoot() ?? Environment.CurrentDirectory,
+        };
+
+        using var process = new Process { StartInfo = startInfo };
+        process.Start();
+        var standardOutputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var standardErrorTask = process.StandardError.ReadToEndAsync(cancellationToken);
+        await process.WaitForExitAsync(cancellationToken);
+
+        return new ProcessRunResult(
+            process.ExitCode,
+            (await standardOutputTask).Trim(),
+            (await standardErrorTask).Trim());
+    }
+
+    private string? TryFindRelayRepositoryRoot()
+    {
+        var baseDirectory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (baseDirectory is not null)
+        {
+            var candidate = Path.Combine(baseDirectory.FullName, "scripts", "card-game", "Start-CardGameRelay.ps1");
+            if (File.Exists(candidate))
+            {
+                return baseDirectory.FullName;
+            }
+
+            baseDirectory = baseDirectory.Parent;
+        }
+
+        return null;
+    }
+
+    private static string QuotePowerShellArgument(string value) =>
+        $"\"{value.Replace("\"", "`\"")}\"";
+
     private void LoadUiSettings()
     {
         _suppressUiSettingCallbacks = true;
@@ -2069,17 +2702,31 @@ public partial class MainWindow : Window
                     : settings.WorkingDirectory;
                 SessionIdTextBox.Text = settings.SessionId ?? string.Empty;
                 InitialPromptTextBox.Text = settings.InitialPrompt ?? string.Empty;
+                ManagedCardGameRootTextBox.Text = string.IsNullOrWhiteSpace(settings.ManagedCardGameRoot)
+                    ? @"D:\Unity\card game"
+                    : settings.ManagedCardGameRoot;
+                ManagedTaskSlugTextBox.Text = string.IsNullOrWhiteSpace(settings.ManagedTaskSlug)
+                    ? "companion-depth-first-slice"
+                    : settings.ManagedTaskSlug;
+                ManagedTurnsTextBox.Text = settings.ManagedTurns <= 1 ? "2" : settings.ManagedTurns.ToString();
+                _currentAdmissionManifestPath = settings.AdmissionManifestPath;
                 UseInteractiveAdaptersCheckBox.IsChecked = settings.UseInteractiveAdapters;
                 AutoApproveAllRequestsCheckBox.IsChecked = settings.AutoApproveAllRequests;
             }
             else
             {
                 WorkingDirectoryTextBox.Text = Environment.CurrentDirectory;
+                ManagedCardGameRootTextBox.Text = @"D:\Unity\card game";
+                ManagedTaskSlugTextBox.Text = "companion-depth-first-slice";
+                ManagedTurnsTextBox.Text = "2";
             }
         }
         catch
         {
             WorkingDirectoryTextBox.Text = Environment.CurrentDirectory;
+            ManagedCardGameRootTextBox.Text = @"D:\Unity\card game";
+            ManagedTaskSlugTextBox.Text = "companion-depth-first-slice";
+            ManagedTurnsTextBox.Text = "2";
         }
         finally
         {
@@ -2097,7 +2744,10 @@ public partial class MainWindow : Window
                 WorkingDirectory = WorkingDirectoryTextBox.Text?.Trim(),
                 SessionId = SessionIdTextBox.Text?.Trim(),
                 InitialPrompt = InitialPromptTextBox.Text,
-                AdmissionManifestPath = TryReadCurrentAdmissionManifestPath(),
+                AdmissionManifestPath = _currentAdmissionManifestPath,
+                ManagedCardGameRoot = ManagedCardGameRootTextBox.Text?.Trim(),
+                ManagedTaskSlug = ManagedTaskSlugTextBox.Text?.Trim(),
+                ManagedTurns = ParseManagedTurns(),
                 UseInteractiveAdapters = UseInteractiveAdaptersCheckBox.IsChecked.GetValueOrDefault(),
                 AutoApproveAllRequests = AutoApproveAllRequestsCheckBox.IsChecked.GetValueOrDefault()
             };
@@ -2115,6 +2765,11 @@ public partial class MainWindow : Window
 
     private string? TryReadCurrentAdmissionManifestPath()
     {
+        if (!string.IsNullOrWhiteSpace(_currentAdmissionManifestPath))
+        {
+            return _currentAdmissionManifestPath;
+        }
+
         try
         {
             var settingsPath = GetUiSettingsPath();
@@ -2126,7 +2781,8 @@ public partial class MainWindow : Window
             var settings = JsonSerializer.Deserialize<RelayUiSettings>(
                 File.ReadAllText(settingsPath),
                 HandoffJson.SerializerOptions);
-            return settings?.AdmissionManifestPath;
+            _currentAdmissionManifestPath = settings?.AdmissionManifestPath;
+            return _currentAdmissionManifestPath;
         }
         catch
         {
@@ -2217,6 +2873,48 @@ public partial class MainWindow : Window
             return null;
         }
     }
+
+    private sealed record ManagedCardGamePreparation(string SessionId, string Prompt, string ManifestPath);
+
+    private sealed record ManagedAutopilotPreparation(bool ShouldStartRelay, string StatusMessage);
+
+    private sealed record ManagerSignalSummary
+    {
+        [JsonPropertyName("overall_status")]
+        public string OverallStatus { get; init; } = string.Empty;
+
+        [JsonPropertyName("reason")]
+        public string Reason { get; init; } = string.Empty;
+
+        [JsonPropertyName("next_action")]
+        public string NextAction { get; init; } = string.Empty;
+
+        [JsonPropertyName("resolved_task_slug")]
+        public string ResolvedTaskSlug { get; init; } = string.Empty;
+
+        [JsonPropertyName("session_id")]
+        public string SessionId { get; init; } = string.Empty;
+
+        [JsonPropertyName("relay_status")]
+        public string RelayStatus { get; init; } = string.Empty;
+
+        [JsonPropertyName("suggested_desktop_action")]
+        public string SuggestedDesktopAction { get; init; } = string.Empty;
+
+        [JsonPropertyName("wait_should_end")]
+        public bool WaitShouldEnd { get; init; }
+
+        [JsonPropertyName("attention_required")]
+        public bool AttentionRequired { get; init; }
+
+        [JsonPropertyName("manager_signal_marker")]
+        public string ManagerSignalMarker { get; init; } = string.Empty;
+
+        [JsonPropertyName("manager_done_marker")]
+        public string ManagerDoneMarker { get; init; } = string.Empty;
+    }
+
+    private sealed record ProcessRunResult(int ExitCode, string OutputText, string ErrorText);
 
     private static string Shorten(string text, int maxLength)
     {
