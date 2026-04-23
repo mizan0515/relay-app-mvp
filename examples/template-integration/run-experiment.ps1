@@ -70,6 +70,11 @@ Step '5. Template validator compatibility probe (known gap: turn-NN filename)' {
     Write-Host '      Probe result is informational — no writes to template repo.'
 }
 
+Step '6. Compact status contract example validation' {
+    & (Join-Path $repoRoot 'examples\template-integration\compact-status-contract\Validate-CompactStatusExample.ps1')
+    if ($LASTEXITCODE -ne 0) { throw "compact status validator exit $LASTEXITCODE" }
+}
+
 Write-Host ''
 Write-Host '=== Summary ===' -ForegroundColor Cyan
 $results.GetEnumerator() | ForEach-Object { Write-Host ("  {0}: {1}" -f $_.Key, $_.Value) }

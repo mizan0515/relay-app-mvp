@@ -228,6 +228,25 @@ Auto-halt conditions (each writes `.autopilot/HALT` + sets STATE status):
 
 ---
 
+## [IMMUTABLE:BEGIN cleanup-safety]
+
+### Autonomous cleanup — safety invariants
+
+The loop MAY delete stale files autonomously, but every deletion MUST obey these invariants. Breaking one = the commit is wrong, regardless of intent. Adoption note: merging this block requires a `IMMUTABLE-ADD:` trailer per `.githooks/commit-msg-protect.sh`; the loop itself does not add IMMUTABLE blocks.
+
+1. **Sidecar-pairing integrity.** If a file has paired metadata (e.g. `.meta`, `.Designer.cs`, generated sidecars), never delete primary without sidecar in the same commit, nor sidecar without primary. Projects without pairing declare `cleanup_pairing: none` in STATE.
+2. **Reference check before delete.** For any candidate under source/doc trees (`CodexClaudeRelay.*/`, `docs/`, `examples/`, `Document/`, `.prompts/`, `skills/`): grep the repo for the file's basename (no extension), any path fragment passable to a runtime loader (reflection, embedded resource, config key, DAD packet path, skill namespace), and test-fixture strings. Any non-self hit → file is NOT stale; do not delete.
+3. **Two-pass rule.** A candidate under source/doc trees must first land in `.autopilot/CLEANUP-CANDIDATES.md` with evidence (last git touch ISO, ref-check output, why-stale) and survive ≥1 full iteration before a deletion PR opens. Same-pass deletion allowed only for: (a) scratch artifacts the loop itself created this iter, (b) files `.gitignore`-matched that slipped into tracking, (c) `tmp-*`/`*.tmp`/`*~`/`*.bak` at repo root or in a declared prototype dir.
+4. **Forbidden cleanup targets (never):** everything in STATE `protected_paths:`, plus `.git/`, `.githooks/`, root `LICENSE`, root `README.md`, root `.gitignore`, `PROJECT-RULES.md`, `AGENTS.md`, `CLAUDE.md`, `DIALOGUE-PROTOCOL.md`, `Document/DAD/**`, `.prompts/**`, `tools/**`, `archive/*` tags.
+5. **Batch cap + auto-merge gate.** ≤20 files deleted per cleanup PR (hard hook cap). A cleanup PR deleting >5 files CANNOT auto-merge — operator review mandatory regardless of other permissions. Cleanup PRs touching `CodexClaudeRelay.Core/`, `CodexClaudeRelay.Desktop/`, `CodexClaudeRelay.CodexProtocol*/`, or `Document/` CANNOT auto-merge.
+6. **Audit trail.** Every `cleanup:`-prefixed commit MUST append to `.autopilot/CLEANUP-LOG.md`: ISO timestamp, short SHA, PR URL, iteration, deleted-file list, `git revert <sha>` rollback, evidence pointer. Missing audit line → rule break.
+7. **Never cleanup inside an Active product slice.** Cleanup is its own mode on its own branch `autopilot/cleanup-<YYYYMMDD-HHMM>`. Mid-feature discovery → add to `CLEANUP-CANDIDATES.md` and keep going.
+8. **No rename-disguised-as-delete.** Use `git mv` in a single commit; never delete+recreate under a new name.
+
+## [IMMUTABLE:END cleanup-safety]
+
+---
+
 ## [IMMUTABLE:BEGIN mvp-gate]
 
 MVP gate authority: `.autopilot/MVP-GATES.md`. Gate count line must exist
@@ -274,6 +293,68 @@ Triggered when `active_task:` in STATE.md is non-null.
   before merge.
 - On task complete: clear `active_task`, append to HISTORY, continue to
   Idle-upkeep next iteration.
+
+## HISTORY / dashboard rotation
+
+`.autopilot/HISTORY.md` and `.autopilot/대시보드.md` grow fast in real usage
+(HISTORY hit 56KB / 800+ lines before this rule). On every boot, after the
+state reads, measure both files:
+
+- `HISTORY.md` — if >50 `## ` headings OR file >20KB: move all but the last
+  10 entries into `.autopilot/HISTORY-ARCHIVE.md` (append; newest-first at
+  the top of a dated rotation block). Commit on the current branch as
+  `chore: rotate HISTORY to archive`. One rotation commit per iter.
+- `대시보드.md` — same rule with 100-entry / 40KB thresholds; archive to
+  `.autopilot/대시보드-ARCHIVE.md`. The streak-collapse rule keeps steady
+  state manageable; rotation is the failsafe when a real activity burst
+  or a bypassed streak-collapse pushed the file over.
+
+Do NOT rotate inside an Active product slice — it is its own tiny commit,
+same rules as cleanup (separate branch / no mid-feature). In fact the
+simplest path is: rotation is allowed during Idle-upkeep or at iter-end
+cleanup, never during Active.
+
+---
+
+## METRICS schema convention (mutable — extends exit-contract Step 2)
+
+Exit-contract specifies required METRICS fields; real usage showed downstreams
+silently dropping required fields and adding bespoke ones without a shared
+naming convention. This section defines the tiered schema for this relay.
+
+**Tier 1 — required on every line (never drop):**
+
+`iter`, `ts`, `mode`, `status`, `duration_s`, `files_read`, `bash_calls`,
+`commits`, `prs`, `budget_exceeded`.
+
+Anti-pattern already seen in this repo: earlier `METRICS.jsonl` lines dropped
+`ts` entirely. That breaks the reschedule watchdog's cache-TTL math and any
+cross-iter time-series analysis. `ts` is Tier 1; ISO-8601 UTC, always present.
+
+**Tier 2 — reserved names (write when available, same semantics upstream):**
+
+- `reschedule: "tool-called" | "external-runner: <name>" | "halted"`
+- `mvp_gates_passing: "N/M"` — from `[IMMUTABLE:mvp-gate]`
+- `cumulative_merges: <int>` — running total since loop boot
+- `pending_review: [<pr-nums>]`
+- `idle_upkeep_streak: <int>` — resets on any non-upkeep iter
+- `merged: 0 | 1` — boolean: did this iter merge a PR? (evidence: `D:\Unity\card game` iters 108–110. Supersedes earlier `merged_this_iter` spec.)
+- `mcp_calls: <int>` — external tool-bridge call count
+- `warnings: "<short sentence>"` — branch survivors, evidence repair, etc.
+
+**Tier 3 — project extensions (prefix with `relay_`):**
+
+Use a `relay_` prefix for any repo-specific field (`relay_editmode_tests`,
+`relay_peer_handshake_ms`, `relay_packet_validator_failures`). Do NOT reuse
+Tier 2 names for different semantics. If a Tier 3 field appears in ≥3
+consecutive iters and is generic enough to be useful in other downstreams,
+propose promoting it to Tier 2 in `autopilot-template/PROMPT.md`.
+
+Renaming Tier 1/2 requires a migration commit that backfills ≥20 prior lines.
+Dropping Tier 2 requires `OPERATOR: retire-metric <name>`. Dropping Tier 1 is
+a contract violation.
+
+---
 
 ## Idle-upkeep mode
 

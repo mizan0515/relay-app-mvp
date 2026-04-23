@@ -1,0 +1,73 @@
+Queue the full prompt forever. State lives in .autopilot/*; do not rely on
+conversation memory. This file is the operator's quick reference — not the
+contract. The contract is .autopilot/PROMPT.md.
+
+Local infinite runner:
+- PowerShell: powershell -File .autopilot\project.ps1 start
+- Bash:       bash .autopilot/project.sh start
+- Lite mode:  set AUTOPILOT_PROMPT_RELATIVE=.autopilot/PROMPT.lite.md
+              before the start command (only for small maintenance loops)
+
+Operator dashboard (Windows):
+- Double-click: 관리자 대시보드 열기.cmd
+- Manually:     powershell -File .autopilot\관리자.ps1 dashboard
+
+Equivalent single-shot Codex invocation (one iteration, no loop):
+- PowerShell: Get-Content -Raw .autopilot\PROMPT.md | codex exec -C . -
+- Bash:       cat .autopilot/PROMPT.md | codex exec -C . -
+
+Unattended opt-in (sandbox bypass is OFF by default — see upstream PITFALLS
+2026-04-24): set $env:AUTOPILOT_CODEX_ARGS='--dangerously-bypass-approvals-and-sandbox'
+before starting the runner. Peer-symmetric relay policy: the same env knob applies
+whether AUTOPILOT_AI=codex or claude — do NOT branch runner behavior on agent.
+
+Core loop summary (informative — authoritative version is PROMPT.md):
+- Read .autopilot/STATE.md, then PROMPT.md boot sections in order.
+- Run boot: HALT check, LOCK, reschedule watchdog, doctor, state reads,
+  probation check, mode decision.
+- Active mode → one commit-worthy slice → PR → auto-merge (when allowed) →
+  post-merge cleanup (fetch --prune, delete :gone locals, tripwire
+  surviving origin/dev/* branches).
+- Idle-upkeep mode → repo scan + web search → append ≤10 lines to
+  FINDINGS.md. Streak-collapse rule: no-delta iters update an in-place
+  counter instead of appending a fresh dashboard/HISTORY row.
+- Exit-contract: write METRICS line, remove LOCK, write NEXT_DELAY,
+  self-reschedule via ScheduleWakeup tool call + 2-line LAST_RESCHEDULE
+  sentinel (line 2 = raw tool response).
+
+Operator signals (preferred paths, single surface each):
+- Direction / product decisions → decision PR against base: (loop opens,
+  operator only merges). Never ask the operator to edit STATE.md by hand.
+- Emergency stop → operator creates .autopilot/HALT via dashboard button
+  or `touch .autopilot/HALT`. Loop halts at next boot.
+- Resume → operator deletes HALT (or merges a decision PR that resolves
+  to `noop` / directive — loop auto-clears decision-related HALTs).
+
+Runner reuse:
+- The default runner reuses ONE detached automation worktree (for example
+  ..\<repo>-autopilot-runner\live) so the parent directory does not fill
+  up with endless iter-* folders. If you need multiple concurrent runners,
+  point AUTOPILOT_WORKTREE at distinct, named worktrees — do NOT create a
+  new worktree per iteration.
+
+Contract-drift tripwire (manual, soft):
+- pwsh -File tools/Validate-Upstream-Contract.ps1
+  Runs the upstream D:\dad-v2-system-template validator (780 lines) against
+  this relay's Document/dialogue/sessions tree. The relay's own
+  tools/Validate-Dad-Packet.ps1 is a 242-line per-packet subset and misses
+  session-wide invariants. Soft by default (exit 0 with warnings); pass
+  -Strict to propagate the upstream exit code. See .autopilot/PITFALLS.md
+  2026-04-24 entry on validator coverage.
+
+Stop conditions:
+- .autopilot/HALT exists.
+- All MVP gates pass (.autopilot/MVP-GATES.md) with no follow-up direction.
+- Repeated env-broken or evolution regressions trip the halt rules
+  in PROMPT.md [IMMUTABLE:halt].
+
+Never:
+- Edit IMMUTABLE blocks in .autopilot/PROMPT.md.
+- Force-push main/master.
+- Skip pre-commit hooks (--no-verify) or signing (--no-gpg-sign).
+- Delete other people's files or branches not created in this iteration
+  without operator approval.
