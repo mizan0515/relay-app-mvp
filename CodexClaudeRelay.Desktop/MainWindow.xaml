@@ -253,6 +253,12 @@
                         Margin="0,0,8,0"
                         Click="RunManagedAutopilotButton_Click"
                         Content="Managed Autopilot Run" />
+                <Button x:Name="RunManagedNextStepButton"
+                        Width="180"
+                        Height="34"
+                        Margin="0,0,8,0"
+                        Click="RunManagedNextStepButton_Click"
+                        Content="Managed Next Step" />
                 <Button x:Name="RunManagedAutopilotLoopButton"
                         Width="200"
                         Height="34"
