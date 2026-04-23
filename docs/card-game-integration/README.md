@@ -179,6 +179,11 @@ What `Easy Start` adds:
 - if the relay dies during that safe session, retries one more fresh session automatically before asking the human to intervene
 - stops again after one safe session so the operator never gets trapped in an invisible long loop
 
+Bounded retry proof:
+- `scripts/gui-smoke/run-gui-easy-operator.ps1 -InjectRelayDeathOnce` simulates one relay death after `Easy Start` reaches `relay_active`
+- the expected compact-signal path is `relay_dead -> relay_active -> injected relay_dead -> relay_active(new session)`
+- this lets operators verify the auto-retry path without reading the full event log
+
 What `Managed Autopilot Loop` adds:
 - repeats `prepare -> bounded relay -> completion write-back` for the requested number of sessions
 - stops early if manager signal says `route_only`, `blocked`, `halted`, or `relay_dead`
