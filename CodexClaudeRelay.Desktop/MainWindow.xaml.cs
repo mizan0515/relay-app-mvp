@@ -37,6 +37,7 @@ public partial class MainWindow : Window
     private bool _suppressUiSettingCallbacks;
     private readonly DispatcherTimer _statusRefreshTimer;
     private string? _relaySignalWatcherKey;
+    private bool _isRefreshingManagedStatus;
 
     public MainWindow()
     {
@@ -146,14 +147,28 @@ public partial class MainWindow : Window
         await DisposeOwnedDisposablesAsync(CancellationToken.None);
     }
 
-    private void StatusRefreshTimer_Tick(object? sender, EventArgs e)
+    private async void StatusRefreshTimer_Tick(object? sender, EventArgs e)
     {
-        if (_broker is null)
+        RefreshUi();
+
+        if (_isRefreshingManagedStatus)
         {
             return;
         }
 
-        RefreshUi();
+        _isRefreshingManagedStatus = true;
+        try
+        {
+            await RefreshManagedStatusAsync(CancellationToken.None);
+        }
+        catch
+        {
+            // Keep the operator surface responsive even if the compact signal is temporarily missing.
+        }
+        finally
+        {
+            _isRefreshingManagedStatus = false;
+        }
     }
 
     private async void StartSessionButton_Click(object sender, RoutedEventArgs e)

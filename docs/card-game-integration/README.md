@@ -177,6 +177,7 @@ What `Easy Start` adds:
 - forces relay mode for the easy path so the operator gets one bounded DAD session instead of a route-only result
 - repairs a stale relay automatically before starting the next bounded session
 - if the relay dies during that safe session, retries one more fresh session automatically before asking the human to intervene
+- refreshes `Easy Status` and `Managed Autopilot Status` from the compact manager signal every few seconds so the screen does not look frozen while a retry is happening
 - stops again after one safe session so the operator never gets trapped in an invisible long loop
 
 Bounded retry proof:
