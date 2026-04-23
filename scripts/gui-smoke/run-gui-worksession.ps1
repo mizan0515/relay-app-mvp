@@ -5,7 +5,7 @@
 #   2. Set WorkingDir + SessionId + custom InitialPrompt + AutoApprove
 #   3. Check Adapters
 #   4. Start Session
-#   5. Auto Run 4 turns
+#   5. Run one relay cycle by default (2 turns)
 #   6. Poll StateSummary for Completed/Paused terminator
 #   7. Dump final state + report
 
@@ -13,15 +13,22 @@ param(
     [Parameter(Mandatory = $true)][string]$WorkingDir,
     [Parameter(Mandatory = $true)][string]$InitialPrompt,
     [string]$SessionId = "work-$(Get-Date -Format yyyyMMdd-HHmmss)",
-    [string]$ScreenshotDir = 'D:\codex-claude-relay\scripts\gui-smoke\out-worksession',
+    [string]$ScreenshotDir = '',
+    [int]$Turns = 2,
     [int]$TimeoutSeconds = 600
 )
 
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Windows.Forms, System.Drawing
 
+$repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
+$appDataDir = Join-Path $env:LOCALAPPDATA 'CodexClaudeRelayMvp'
+$signalJsonPath = Join-Path $appDataDir 'auto-logs\relay-live-signal.json'
+if (-not $ScreenshotDir) {
+    $ScreenshotDir = Join-Path $repoRoot 'scripts\gui-smoke\out-worksession'
+}
 New-Item -ItemType Directory -Force -Path $ScreenshotDir | Out-Null
-$exe = 'D:\codex-claude-relay\CodexClaudeRelay.Desktop\bin\Debug\net10.0-windows\CodexClaudeRelay.Desktop.exe'
+$exe = Join-Path $repoRoot 'CodexClaudeRelay.Desktop\bin\Debug\net10.0-windows\CodexClaudeRelay.Desktop.exe'
 
 function Save-Screen([string]$tag) {
     $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
@@ -77,11 +84,70 @@ function Toggle-On($el) {
     $tp = $el.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern)
     if ($tp.Current.ToggleState -ne [System.Windows.Automation.ToggleState]::On) { $tp.Toggle() }
 }
+function Wait-AdapterStatusReady($win, [int]$timeoutSec = 60) {
+    $deadline = (Get-Date).AddSeconds($timeoutSec)
+    $statusEl = Find-ByAutomationId $win 'AdapterStatusTextBlock'
+    while ((Get-Date) -lt $deadline) {
+        $status = Get-Text $statusEl
+        if (
+            -not [string]::IsNullOrWhiteSpace($status) -and
+            $status -notmatch 'Status not checked yet\.' -and
+            $status -notmatch '^Checking adapter health\.\.\.$'
+        ) {
+            return $status
+        }
+
+        Start-Sleep -Milliseconds 500
+    }
+
+    throw "Adapter status did not finish refreshing within $timeoutSec s"
+}
+function Invoke-TurnPlan($win, [int]$turns) {
+    if ($turns -le 0) {
+        throw 'Turns must be greater than zero.'
+    }
+
+    if ($turns -eq 2) {
+        $cycleButton = Find-ByAutomationId $win 'RunCycleButton'
+        Click-Button $cycleButton
+        return
+    }
+
+    if ($turns -eq 4) {
+        $autoRunButton = Find-ByAutomationId $win 'AutoRunButton'
+        Click-Button $autoRunButton
+        return
+    }
+
+    for ($i = 0; $i -lt $turns; $i++) {
+        Click-Button (Find-ByAutomationId $win 'AdvanceButton')
+    }
+}
+function Read-RelaySignal() {
+    if (-not (Test-Path -LiteralPath $signalJsonPath)) {
+        return $null
+    }
+
+    try {
+        return Get-Content -Raw -LiteralPath $signalJsonPath -Encoding UTF8 | ConvertFrom-Json
+    } catch {
+        return $null
+    }
+}
+function Format-RelaySignal($signal) {
+    if ($null -eq $signal) {
+        return '[RELAY_SIGNAL] unavailable'
+    }
+
+    $watchdog = if ($null -ne $signal.watchdog_remaining_seconds) { "$($signal.watchdog_remaining_seconds)s" } else { 'inactive' }
+    return "[RELAY_SIGNAL] status=$($signal.status) session=$($signal.session_id) turn=$($signal.current_turn) role=$($signal.active_role) progress_age=$($signal.last_progress_age_seconds)s watchdog=$watchdog approvals=$($signal.pending_approval_count)"
+}
 
 Write-Host "=== UIA GUI worksession @ $(Get-Date -Format o) ==="
 Write-Host "workingDir:    $WorkingDir"
 Write-Host "sessionId:     $SessionId"
 Write-Host "initialPrompt: $($InitialPrompt.Substring(0, [Math]::Min(120, $InitialPrompt.Length)))..."
+Write-Host "turns:         $Turns"
 Write-Host "shots:         $ScreenshotDir"
 
 if (-not (Test-Path $exe)) { throw "exe not built: $exe" }
@@ -105,8 +171,7 @@ Save-Screen 'after-config'
 
 Write-Host "[3/6] Check Adapters..."
 Click-Button (Find-ByAutomationId $win 'CheckAdaptersButton')
-Start-Sleep -Seconds 8
-$adapter = Get-Text (Find-ByAutomationId $win 'AdapterStatusTextBlock')
+$adapter = Wait-AdapterStatusReady $win 120
 Write-Host "--- adapter status ---`n$adapter`n----------------------"
 Save-Screen 'after-check-adapters'
 
@@ -115,26 +180,27 @@ Click-Button (Find-ByAutomationId $win 'StartSessionButton')
 Start-Sleep -Seconds 6
 Save-Screen 'after-start'
 
-Write-Host "[5/6] Auto Run 4..."
-Click-Button (Find-ByAutomationId $win 'AutoRunButton')
+Write-Host "[5/6] running $Turns relay turn(s)..."
+Invoke-TurnPlan $win $Turns
 
 Write-Host "[6/6] polling state (timeout=${TimeoutSeconds}s)..."
 $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-$stateEl = Find-ByAutomationId $win 'StateSummaryTextBlock'
-$lastTurn = -1
+$lastSignalMarker = ''
 while ((Get-Date) -lt $deadline) {
     Start-Sleep -Seconds 6
-    $state = Get-Text $stateEl
-    $turnMatch = [regex]::Match($state, 'Current turn:\s*(\d+)')
-    $statusMatch = [regex]::Match($state, 'Status:\s*(\w+)')
-    $turn = if ($turnMatch.Success) { [int]$turnMatch.Groups[1].Value } else { -1 }
-    $status = if ($statusMatch.Success) { $statusMatch.Groups[1].Value } else { '?' }
-    if ($turn -ne $lastTurn) {
-        Write-Host "  [poll] turn=$turn status=$status"
-        $lastTurn = $turn
+    $signal = Read-RelaySignal
+    if ($null -eq $signal) {
+        continue
     }
-    if ($status -match 'Paused|Completed|Failed|Error|Stopped') {
-        Write-Host "  [poll] terminal status: $status"
+
+    $signalMarker = Format-RelaySignal $signal
+    if ($signalMarker -ne $lastSignalMarker) {
+        Write-Host "  [poll] $signalMarker"
+        $lastSignalMarker = $signalMarker
+    }
+
+    if ($signal.status -match 'Paused|Completed|Failed|Error|Stopped' -or $signal.is_terminal -eq $true) {
+        Write-Host "  [poll] terminal status: $($signal.status)"
         Start-Sleep -Seconds 2
         break
     }
@@ -142,8 +208,13 @@ while ((Get-Date) -lt $deadline) {
 Save-Screen 'after-autorun'
 
 Write-Host ""
-Write-Host "=== StateSummary ==="
-Get-Text (Find-ByAutomationId $win 'StateSummaryTextBlock') | Write-Host
+Write-Host "=== RelaySignal ==="
+$finalSignal = Read-RelaySignal
+if ($null -ne $finalSignal) {
+    $finalSignal | ConvertTo-Json -Depth 6 | Write-Host
+} else {
+    Write-Host '{"signal":"unavailable"}'
+}
 Write-Host ""
 Write-Host "=== AdapterStatus (final) ==="
 Get-Text (Find-ByAutomationId $win 'AdapterStatusTextBlock') | Write-Host

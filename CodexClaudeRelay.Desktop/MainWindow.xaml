@@ -60,6 +60,24 @@
                          Margin="0,6,0,0"
                          Padding="8" />
 
+                <TextBlock Margin="0,12,0,0" FontWeight="SemiBold" Text="Managed CardGame Root" />
+                <TextBox x:Name="ManagedCardGameRootTextBox"
+                         Margin="0,6,0,0"
+                         Padding="8"
+                         Text="D:\Unity\card game" />
+
+                <TextBlock Margin="0,12,0,0" FontWeight="SemiBold" Text="Managed Task Slug" />
+                <TextBox x:Name="ManagedTaskSlugTextBox"
+                         Margin="0,6,0,0"
+                         Padding="8"
+                         Text="companion-depth-first-slice" />
+
+                <TextBlock Margin="0,12,0,0" FontWeight="SemiBold" Text="Managed Turns" />
+                <TextBox x:Name="ManagedTurnsTextBox"
+                         Margin="0,6,0,0"
+                         Padding="8"
+                         Text="2" />
+
                 <CheckBox x:Name="UseInteractiveAdaptersCheckBox"
                           Margin="0,12,0,0"
                           Content="Use interactive adapters (experimental; Codex uses app-server, Claude uses stream-json)" />
@@ -155,6 +173,31 @@
                              VerticalScrollBarVisibility="Auto"
                              HorizontalScrollBarVisibility="Auto" />
                 </Border>
+
+                <TextBlock Margin="0,12,0,0"
+                           FontWeight="SemiBold"
+                           Text="Managed Autopilot Status" />
+                <Border x:Name="ManagedStatusBorder"
+                        Margin="0,6,0,0"
+                        Padding="12"
+                        Background="#FFF8FAFC"
+                        BorderBrush="#FFD0D7DE"
+                        BorderThickness="1"
+                        CornerRadius="8">
+                    <TextBox x:Name="ManagedStatusTextBox"
+                             IsReadOnly="True"
+                             IsReadOnlyCaretVisible="True"
+                             BorderThickness="0"
+                             Background="Transparent"
+                             Padding="0"
+                             Height="120"
+                             FontFamily="Consolas"
+                             AcceptsReturn="True"
+                             Text="Managed status not loaded yet."
+                             TextWrapping="Wrap"
+                             VerticalScrollBarVisibility="Auto"
+                             HorizontalScrollBarVisibility="Auto" />
+                </Border>
             </StackPanel>
         </Grid>
 
@@ -186,6 +229,30 @@
                         Margin="0,0,8,0"
                         Click="AdvanceButton_Click"
                         Content="Advance Once" />
+                <Button x:Name="RunCycleButton"
+                        Width="130"
+                        Height="34"
+                        Margin="0,0,8,0"
+                        Click="RunCycleButton_Click"
+                        Content="Run One Cycle" />
+                <Button x:Name="RunManagedCardGameButton"
+                        Width="180"
+                        Height="34"
+                        Margin="0,0,8,0"
+                        Click="RunManagedCardGameButton_Click"
+                        Content="Managed CardGame Run" />
+                <Button x:Name="RunManagedAutopilotButton"
+                        Width="190"
+                        Height="34"
+                        Margin="0,0,8,0"
+                        Click="RunManagedAutopilotButton_Click"
+                        Content="Managed Autopilot Run" />
+                <Button x:Name="RefreshManagedStatusButton"
+                        Width="180"
+                        Height="34"
+                        Margin="0,0,8,0"
+                        Click="RefreshManagedStatusButton_Click"
+                        Content="Refresh Managed Status" />
                 <Button x:Name="AutoRunButton"
                         Width="120"
                         Height="34"
@@ -288,7 +355,7 @@
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <TextBlock FontWeight="SemiBold" Text="Event Log" />
+                <TextBlock FontWeight="SemiBold" Text="Event Log Tail" />
                 <TextBox x:Name="EventLogTextBox"
                          Grid.Row="1"
                          Margin="0,6,0,0"

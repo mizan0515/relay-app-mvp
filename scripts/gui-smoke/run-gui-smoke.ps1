@@ -12,15 +12,19 @@
 
 param(
     [string]$WorkingDir = 'D:\dad-test-project',
-    [string]$ScreenshotDir = 'D:\codex-claude-relay\scripts\gui-smoke\out-smoke',
+    [string]$ScreenshotDir = '',
     [int]$TimeoutSeconds = 180
 )
 
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Windows.Forms, System.Drawing
 
+$repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
+if (-not $ScreenshotDir) {
+    $ScreenshotDir = Join-Path $repoRoot 'scripts\gui-smoke\out-smoke'
+}
 New-Item -ItemType Directory -Force -Path $ScreenshotDir | Out-Null
-$exe = 'D:\codex-claude-relay\CodexClaudeRelay.Desktop\bin\Debug\net10.0-windows\CodexClaudeRelay.Desktop.exe'
+$exe = Join-Path $repoRoot 'CodexClaudeRelay.Desktop\bin\Debug\net10.0-windows\CodexClaudeRelay.Desktop.exe'
 
 function Save-Screen([string]$tag) {
     $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
@@ -83,6 +87,24 @@ function Toggle-On($el) {
     $tp = $el.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern)
     if ($tp.Current.ToggleState -ne [System.Windows.Automation.ToggleState]::On) { $tp.Toggle() }
 }
+function Wait-AdapterStatusReady($win, [int]$timeoutSec = 60) {
+    $deadline = (Get-Date).AddSeconds($timeoutSec)
+    $statusEl = Find-ByAutomationId $win 'AdapterStatusTextBlock'
+    while ((Get-Date) -lt $deadline) {
+        $status = Get-Text $statusEl
+        if (
+            -not [string]::IsNullOrWhiteSpace($status) -and
+            $status -notmatch 'Status not checked yet\.' -and
+            $status -notmatch '^Checking adapter health\.\.\.$'
+        ) {
+            return $status
+        }
+
+        Start-Sleep -Milliseconds 500
+    }
+
+    throw "Adapter status did not finish refreshing within $timeoutSec s"
+}
 
 Write-Host "=== UIA GUI smoke @ $(Get-Date -Format o) ==="
 Write-Host "exe:        $exe"
@@ -116,9 +138,8 @@ Save-Screen 'after-config'
 Write-Host "[4/7] clicking Check Adapters..."
 $checkBtn = Find-ByAutomationId $win 'CheckAdaptersButton'
 Click-Button $checkBtn
-Start-Sleep -Seconds 8
 Save-Screen 'after-check-adapters'
-$adapter = (Get-Text (Find-ByAutomationId $win 'AdapterStatusTextBlock'))
+$adapter = Wait-AdapterStatusReady $win 120
 Write-Host "--- adapter status ---"
 Write-Host $adapter
 Write-Host "----------------------"
