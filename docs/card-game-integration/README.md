@@ -28,8 +28,6 @@ call when a task needs Codex <-> Claude peer turns.
   - centrally approved tool registry for compact artifacts, relay runtimes, script runners, and Unity MCP
 - `profiles/card-game/policy-registry.json`
   - centrally approved policy registry for compact-artifact discipline, forbidden-tool rules, and required evidence contracts
-- `profiles/card-game/prompt-slim-policy.json`
-  - compact threshold policy for session prompt, skill bundle, and operator prompt size
 - `scripts/card-game/Install-CardGameProfile.ps1`
   - installs the card-game profile into `%LocalAppData%\CodexClaudeRelayMvp`
 - `scripts/card-game/New-CardGameSessionPrompt.ps1`
@@ -163,6 +161,8 @@ When governance blocks a slice, manager text also includes:
 - `[TOOL_REGISTRY] status=...`
 - `[POLICY_REGISTRY] status=...`
 - `[PROMPT_SURFACE] status=...`
+- `[ANOMALY] status=...`
+- `[SECURITY_POSTURE] risk=...`
 - `[RETRY_BUDGET] exhausted unity_verification` or `[RETRY_BUDGET] left=... limit=...` when retry budgeting is active
 
 These are the only lines an LLM or operator needs to read for routine status checks.

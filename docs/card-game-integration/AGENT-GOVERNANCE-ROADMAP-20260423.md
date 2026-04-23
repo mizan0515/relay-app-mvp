@@ -52,15 +52,16 @@
 
 - add compact anomaly markers for unusual retry patterns, off-route tool usage, output-budget spikes, and identity/tool mismatches
 - avoid full-log analysis by default; derive anomalies from compact counters and known relay events
+- status: initial compact implementation added via `anomaly-rules.json` and `generated-anomaly-status.*`
 
 ### Step 5: Unified posture
 
 - extend ops dashboard with a single security posture section
 - unify identity, registry, policy, anomaly, and remediation status into one operator view
+- status: initial compact implementation added via `generated-security-posture.*`
 
 ## Token-efficiency posture
 
 - prefer removing avoidable context and tool exposure before raising model effort or output budgets
 - keep compact artifacts as the default evidence path
 - make every new governance layer emit small JSON/TXT outputs so the operator prompt can stay stable and cheap
-- `claude-slim` is applied here as a compact prompt-surface audit rather than destructive cleanup: scan first, classify bloat, surface a recommendation, then trim prompts/skills/read-paths before spending more relay turns

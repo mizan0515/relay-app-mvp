@@ -11,6 +11,9 @@ $repoRoot = Resolve-Path (Join-Path $scriptRoot '..\..')
 $generatedRoot = Join-Path $CardGameRoot '.autopilot\generated'
 $loopStatusPath = Join-Path $repoRoot 'profiles\card-game\generated-loop-status.json'
 $governanceStatusPath = Join-Path $repoRoot 'profiles\card-game\generated-governance-status.json'
+$promptSurfacePath = Join-Path $repoRoot 'profiles\card-game\generated-prompt-surface-status.json'
+$anomalyStatusPath = Join-Path $repoRoot 'profiles\card-game\generated-anomaly-status.json'
+$securityPosturePath = Join-Path $repoRoot 'profiles\card-game\generated-security-posture.json'
 
 if (-not $OutputJsonPath) {
   $OutputJsonPath = Join-Path $generatedRoot 'relay-manager-signal.json'
@@ -51,6 +54,24 @@ try {
 } catch {
 }
 $governanceStatus = Read-JsonFile -Path $governanceStatusPath
+$promptSurface = Read-JsonFile -Path $promptSurfacePath
+$anomalyStatus = $null
+try {
+  & powershell -ExecutionPolicy Bypass -File (Join-Path $scriptRoot 'Get-CardGameAnomalyStatus.ps1') `
+    -CardGameRoot $CardGameRoot `
+    -ManifestPath (Join-Path $repoRoot 'profiles\card-game\generated-admission.json') `
+    -OutputJsonPath $anomalyStatusPath | Out-Null
+} catch {
+}
+$anomalyStatus = Read-JsonFile -Path $anomalyStatusPath
+$securityPosture = $null
+try {
+  & powershell -ExecutionPolicy Bypass -File (Join-Path $scriptRoot 'Get-CardGameSecurityPosture.ps1') `
+    -CardGameRoot $CardGameRoot `
+    -OutputJsonPath $securityPosturePath | Out-Null
+} catch {
+}
+$securityPosture = Read-JsonFile -Path $securityPosturePath
 $relaySignal = $null
 try {
   $relaySignal = & powershell -ExecutionPolicy Bypass -File (Join-Path $scriptRoot 'Get-CardGameRelaySignal.ps1') -CardGameRoot $CardGameRoot | ConvertFrom-Json
@@ -238,11 +259,19 @@ $summary = [ordered]@{
   policy_registry_marker = if ($governanceStatus) { [string]$governanceStatus.policy_registry_marker } else { '' }
   active_policy_ids = if ($governanceStatus) { @($governanceStatus.active_policy_ids) } else { @() }
   missing_policy_ids = if ($governanceStatus) { @($governanceStatus.missing_policy_ids) } else { @() }
-  prompt_surface_status = if ($governanceStatus) { [string]$governanceStatus.prompt_surface_status } else { '' }
-  prompt_surface_path = if ($governanceStatus) { [string]$governanceStatus.prompt_surface_path } else { '' }
-  prompt_surface_marker = if ($governanceStatus) { [string]$governanceStatus.prompt_surface_marker } else { '' }
-  prompt_surface_issues = if ($governanceStatus) { @($governanceStatus.prompt_surface_issues) } else { @() }
-  prompt_surface_recommendation = if ($governanceStatus) { [string]$governanceStatus.prompt_surface_recommendation } else { '' }
+  prompt_surface_status = if ($promptSurface) { [string]$promptSurface.status } else { '' }
+  prompt_surface_path = $promptSurfacePath
+  prompt_surface_marker = if ($promptSurface) { [string]$promptSurface.summary_marker } else { '' }
+  prompt_surface_issues = if ($promptSurface) { @($promptSurface.issues) } else { @() }
+  prompt_surface_recommendation = if ($promptSurface) { [string]$promptSurface.recommendation } else { '' }
+  anomaly_status = if ($anomalyStatus) { [string]$anomalyStatus.status } else { '' }
+  anomaly_path = $anomalyStatusPath
+  anomaly_marker = if ($anomalyStatus) { [string]$anomalyStatus.summary_marker } else { '' }
+  anomaly_flags = if ($anomalyStatus) { @($anomalyStatus.flags) } else { @() }
+  security_posture_risk = if ($securityPosture) { [string]$securityPosture.risk } else { '' }
+  security_posture_reason = if ($securityPosture) { [string]$securityPosture.reason } else { '' }
+  security_posture_path = $securityPosturePath
+  security_posture_marker = if ($securityPosture) { [string]$securityPosture.summary_marker } else { '' }
   blocker_artifact_path = if ($governanceStatus) { [string]$governanceStatus.blocker_artifact_path } else { '' }
   blocker_hint = if ($governanceStatus) { [string]$governanceStatus.blocker_hint } else { '' }
   blocker_detail = if ($governanceStatus) { [string]$governanceStatus.blocker_detail } else { '' }
@@ -276,7 +305,9 @@ $summary | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $OutputJsonPath -E
   if ($governanceStatus) { [string]$governanceStatus.agent_identity_marker } else { '' }
   if ($governanceStatus) { [string]$governanceStatus.tool_registry_marker } else { '' }
   if ($governanceStatus) { [string]$governanceStatus.policy_registry_marker } else { '' }
-  if ($governanceStatus) { [string]$governanceStatus.prompt_surface_marker } else { '' }
+  if ($promptSurface) { [string]$promptSurface.summary_marker } else { '' }
+  if ($anomalyStatus) { [string]$anomalyStatus.summary_marker } else { '' }
+  if ($securityPosture) { [string]$securityPosture.summary_marker } else { '' }
   $retryBudgetMarker
   $relayMarker
 ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Set-Content -LiteralPath $OutputTextPath -Encoding UTF8

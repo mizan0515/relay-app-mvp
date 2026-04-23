@@ -24,7 +24,6 @@ $toolPolicyOutputPath = Join-Path $repoRoot 'profiles\card-game\generated-tool-p
 $agentIdentityOutputPath = Join-Path $repoRoot 'profiles\card-game\generated-agent-identity-status.json'
 $toolRegistryOutputPath = Join-Path $repoRoot 'profiles\card-game\generated-tool-registry-status.json'
 $policyRegistryOutputPath = Join-Path $repoRoot 'profiles\card-game\generated-policy-registry-status.json'
-$promptSurfaceOutputPath = Join-Path $repoRoot 'profiles\card-game\generated-prompt-surface-status.json'
 $remediationStatusPath = Join-Path $CardGameRoot '.autopilot\generated\relay-remediation-status.json'
 $unityVerificationRetryLimit = 2
 
@@ -34,7 +33,6 @@ $toolPolicy = $null
 $agentIdentity = $null
 $toolRegistry = $null
 $policyRegistry = $null
-$promptSurface = $null
 $remediationStatus = $null
 $unityVerificationRetryCount = 0
 
@@ -87,16 +85,6 @@ try {
     -OutputJsonPath $policyRegistryOutputPath | ConvertFrom-Json
 } catch {
   $policyRegistry = $null
-}
-
-try {
-  $promptSurface = & powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'Get-CardGamePromptSurfaceStatus.ps1') `
-    -ManifestPath $ManifestPath `
-    -PromptPath (Join-Path $repoRoot 'profiles\card-game\generated-session-prompt.md') `
-    -SkillBundlePath (Join-Path $repoRoot 'profiles\card-game\generated-skill-bundle.md') `
-    -OutputJsonPath $promptSurfaceOutputPath | ConvertFrom-Json
-} catch {
-  $promptSurface = $null
 }
 
 try {
@@ -306,11 +294,6 @@ $summary = [pscustomobject]@{
   policy_registry_marker = if ($policyRegistry) { [string]$policyRegistry.summary_marker } else { '' }
   active_policy_ids = if ($policyRegistry) { @($policyRegistry.active_policy_ids) } else { @() }
   missing_policy_ids = if ($policyRegistry) { @($policyRegistry.missing_policy_ids) } else { @() }
-  prompt_surface_status = if ($promptSurface) { [string]$promptSurface.status } else { '' }
-  prompt_surface_path = $promptSurfaceOutputPath
-  prompt_surface_marker = if ($promptSurface) { [string]$promptSurface.summary_marker } else { '' }
-  prompt_surface_issues = if ($promptSurface) { @($promptSurface.issues) } else { @() }
-  prompt_surface_recommendation = if ($promptSurface) { [string]$promptSurface.recommendation } else { '' }
   required_evidence_status = if ($requiredEvidence) { [string]$requiredEvidence.status } else { '' }
   required_evidence_path = $requiredEvidenceOutputPath
   required_evidence_marker = if ($requiredEvidence) { [string]$requiredEvidence.summary_marker } else { '' }
@@ -348,7 +331,6 @@ $summary | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $OutputJsonPath -E
   $summary.agent_identity_marker
   $summary.tool_registry_marker
   $summary.policy_registry_marker
-  $summary.prompt_surface_marker
   $summary.required_evidence_marker
   $summary.tool_policy_marker
 ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Set-Content -LiteralPath $OutputTextPath -Encoding UTF8

@@ -32,6 +32,9 @@ $governancePath = Join-Path $repoRoot 'profiles\card-game\generated-governance-s
 $agentIdentityPath = Join-Path $repoRoot 'profiles\card-game\generated-agent-identity-status.json'
 $toolRegistryPath = Join-Path $repoRoot 'profiles\card-game\generated-tool-registry-status.json'
 $policyRegistryPath = Join-Path $repoRoot 'profiles\card-game\generated-policy-registry-status.json'
+$promptSurfacePath = Join-Path $repoRoot 'profiles\card-game\generated-prompt-surface-status.json'
+$anomalyStatusPath = Join-Path $repoRoot 'profiles\card-game\generated-anomaly-status.json'
+$securityPosturePath = Join-Path $repoRoot 'profiles\card-game\generated-security-posture.json'
 $remediationStatusPath = Join-Path $CardGameRoot '.autopilot\generated\relay-remediation-status.json'
 if (-not $HeuristicsPath) {
   $HeuristicsPath = Join-Path $repoRoot 'docs\card-game-integration\learning-memory\heuristics.json'
@@ -85,6 +88,9 @@ $governance = if (Test-Path -LiteralPath $governancePath) { Get-Content -Raw -Li
 $agentIdentity = if (Test-Path -LiteralPath $agentIdentityPath) { Get-Content -Raw -LiteralPath $agentIdentityPath -Encoding UTF8 | ConvertFrom-Json } else { $null }
 $toolRegistry = if (Test-Path -LiteralPath $toolRegistryPath) { Get-Content -Raw -LiteralPath $toolRegistryPath -Encoding UTF8 | ConvertFrom-Json } else { $null }
 $policyRegistry = if (Test-Path -LiteralPath $policyRegistryPath) { Get-Content -Raw -LiteralPath $policyRegistryPath -Encoding UTF8 | ConvertFrom-Json } else { $null }
+$promptSurface = if (Test-Path -LiteralPath $promptSurfacePath) { Get-Content -Raw -LiteralPath $promptSurfacePath -Encoding UTF8 | ConvertFrom-Json } else { $null }
+$anomalyStatus = if (Test-Path -LiteralPath $anomalyStatusPath) { Get-Content -Raw -LiteralPath $anomalyStatusPath -Encoding UTF8 | ConvertFrom-Json } else { $null }
+$securityPosture = if (Test-Path -LiteralPath $securityPosturePath) { Get-Content -Raw -LiteralPath $securityPosturePath -Encoding UTF8 | ConvertFrom-Json } else { $null }
 $remediation = if (Test-Path -LiteralPath $remediationStatusPath) { Get-Content -Raw -LiteralPath $remediationStatusPath -Encoding UTF8 | ConvertFrom-Json } else { $null }
 $heuristics = if (Test-Path -LiteralPath $HeuristicsPath) { Get-Content -Raw -LiteralPath $HeuristicsPath -Encoding UTF8 | ConvertFrom-Json } else { $null }
 
@@ -171,13 +177,34 @@ $dashboard = [ordered]@{
   } else {
     $null
   }
-  prompt_surface = if ($governance) {
+  prompt_surface = if ($promptSurface) {
     [ordered]@{
-      status = [string]$governance.prompt_surface_status
-      marker = [string]$governance.prompt_surface_marker
-      issues = @($governance.prompt_surface_issues)
-      recommendation = [string]$governance.prompt_surface_recommendation
-      path = [string]$governance.prompt_surface_path
+      status = [string]$promptSurface.status
+      marker = [string]$promptSurface.summary_marker
+      issues = @($promptSurface.issues)
+      recommendation = [string]$promptSurface.recommendation
+      path = $promptSurfacePath
+    }
+  } else {
+    $null
+  }
+  anomaly = if ($anomalyStatus) {
+    [ordered]@{
+      status = [string]$anomalyStatus.status
+      marker = [string]$anomalyStatus.summary_marker
+      flags = @($anomalyStatus.flags)
+      path = $anomalyStatusPath
+    }
+  } else {
+    $null
+  }
+  security_posture = if ($securityPosture) {
+    [ordered]@{
+      risk = [string]$securityPosture.risk
+      reason = [string]$securityPosture.reason
+      marker = [string]$securityPosture.summary_marker
+      flags = @($securityPosture.anomaly_flags)
+      path = $securityPosturePath
     }
   } else {
     $null
@@ -355,6 +382,41 @@ if ($dashboard.prompt_surface) {
     $lines.Add('- Issue: ' + [string]$issue)
   }
   if ($dashboard.prompt_surface.recommendation) { $lines.Add('- Recommendation: ' + $dashboard.prompt_surface.recommendation) }
+  $lines.Add('')
+}
+if ($dashboard.prompt_surface) {
+  $lines.Add('## Prompt Surface')
+  $lines.Add('')
+  $lines.Add('- Status: ' + $dashboard.prompt_surface.status)
+  $lines.Add('- Marker: ' + $dashboard.prompt_surface.marker)
+  if ($dashboard.prompt_surface.path) { $lines.Add('- Artifact: ' + $dashboard.prompt_surface.path) }
+  foreach ($issue in @($dashboard.prompt_surface.issues) | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) }) {
+    $lines.Add('- Issue: ' + [string]$issue)
+  }
+  if ($dashboard.prompt_surface.recommendation) { $lines.Add('- Recommendation: ' + $dashboard.prompt_surface.recommendation) }
+  $lines.Add('')
+}
+if ($dashboard.anomaly) {
+  $lines.Add('## Anomaly Detection')
+  $lines.Add('')
+  $lines.Add('- Status: ' + $dashboard.anomaly.status)
+  $lines.Add('- Marker: ' + $dashboard.anomaly.marker)
+  if ($dashboard.anomaly.path) { $lines.Add('- Artifact: ' + $dashboard.anomaly.path) }
+  foreach ($flag in @($dashboard.anomaly.flags) | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) }) {
+    $lines.Add('- Flag: ' + [string]$flag)
+  }
+  $lines.Add('')
+}
+if ($dashboard.security_posture) {
+  $lines.Add('## Security Posture')
+  $lines.Add('')
+  $lines.Add('- Risk: ' + $dashboard.security_posture.risk)
+  $lines.Add('- Reason: ' + $dashboard.security_posture.reason)
+  $lines.Add('- Marker: ' + $dashboard.security_posture.marker)
+  if ($dashboard.security_posture.path) { $lines.Add('- Artifact: ' + $dashboard.security_posture.path) }
+  foreach ($flag in @($dashboard.security_posture.flags) | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) }) {
+    $lines.Add('- Correlated flag: ' + [string]$flag)
+  }
   $lines.Add('')
 }
 $lines.Add('## Governance')

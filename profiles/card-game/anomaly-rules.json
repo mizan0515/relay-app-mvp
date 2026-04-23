@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "hung_progress_age_seconds": 300,
+  "relay_session_mismatch_is_anomaly": true,
+  "retry_budget_exhausted_is_anomaly": true,
+  "prompt_surface_warn_is_anomaly": true,
+  "tool_policy_violation_is_anomaly": true
+}

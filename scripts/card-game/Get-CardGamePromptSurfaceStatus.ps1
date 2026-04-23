@@ -94,19 +94,19 @@ $adminPromptTokens = Get-ApproxTokens -Text $adminPromptText
 $totalTokens = $sessionPromptTokens + $skillBundleTokens + $adminPromptTokens
 
 $issues = New-Object System.Collections.Generic.List[string]
-if ($sessionPromptTokens -gt [int]$policy.max_session_prompt_tokens) {
+if ($policy -and $sessionPromptTokens -gt [int]$policy.max_session_prompt_tokens) {
   $issues.Add('session_prompt_large') | Out-Null
 }
-if ($skillBundleTokens -gt [int]$policy.max_skill_bundle_tokens) {
+if ($policy -and $skillBundleTokens -gt [int]$policy.max_skill_bundle_tokens) {
   $issues.Add('skill_bundle_large') | Out-Null
 }
-if ($adminPromptTokens -gt [int]$policy.max_admin_prompt_tokens) {
+if ($policy -and $adminPromptTokens -gt [int]$policy.max_admin_prompt_tokens) {
   $issues.Add('admin_prompt_large') | Out-Null
 }
-if ($requiredSkills.Count -gt [int]$policy.max_required_skills) {
+if ($policy -and $requiredSkills.Count -gt [int]$policy.max_required_skills) {
   $issues.Add('required_skills_many') | Out-Null
 }
-if ($readPath.Count -gt [int]$policy.max_recommended_read_path_entries) {
+if ($policy -and $readPath.Count -gt [int]$policy.max_recommended_read_path_entries) {
   $issues.Add('recommended_read_path_wide') | Out-Null
 }
 
