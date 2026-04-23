@@ -134,12 +134,13 @@ UI instead of manual PowerShell.
 
 1. Launch `CodexClaudeRelay.Desktop`.
 2. Fill or keep the defaults for:
-   `Managed CardGame Root`, `Managed Task Slug`, `Managed Turns`.
+   `Managed CardGame Root`, `Managed Task Slug`, `Managed Turns`, `Managed Loop Sessions`.
 3. Click `Managed CardGame Run`.
 4. For backlog/decision-driven execution from the same UI, click `Managed Autopilot Run`.
-5. Read only the compact markers in the status mirror:
+5. To keep preparing/running/completing several bounded slices from the same window, click `Managed Autopilot Loop`.
+6. Read only the compact markers in the status mirror:
    `D:\Unity\card game\.autopilot\generated\relay-live-signal.txt`
-6. If the relay dies, read:
+7. If the relay dies, read:
    `D:\Unity\card game\.autopilot\generated\relay-manager-signal.txt`
 
 What this button does:
@@ -154,6 +155,11 @@ What `Managed Autopilot Run` adds:
 - respects route/blocked/halt outcomes instead of blindly starting DAD every time
 - starts relay only when the loop resolver says the next action is `run`
 - writes one manager-level signal artifact so the operator can see `relay_dead`, `route_only`, `prepare_next`, `blocked`, or `halted`
+
+What `Managed Autopilot Loop` adds:
+- repeats `prepare -> bounded relay -> completion write-back` for the requested number of sessions
+- stops early if manager signal says `route_only`, `blocked`, `halted`, or `relay_dead`
+- keeps the operator inside Codex Desktop instead of bouncing back to manual completion commands
 
 Stale signal handling:
 - every live signal now carries `source_pid`, `source_process_started_at`, and `heartbeat_at`

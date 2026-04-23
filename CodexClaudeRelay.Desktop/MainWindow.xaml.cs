@@ -64,6 +64,7 @@ public partial class MainWindow : Window
         ManagedCardGameRootTextBox.TextChanged += PersistUiSettingsTextChanged;
         ManagedTaskSlugTextBox.TextChanged += PersistUiSettingsTextChanged;
         ManagedTurnsTextBox.TextChanged += PersistUiSettingsTextChanged;
+        ManagedLoopSessionsTextBox.TextChanged += PersistUiSettingsTextChanged;
         Loaded += MainWindow_Loaded;
         Closed += MainWindow_Closed;
     }
@@ -273,6 +274,73 @@ public partial class MainWindow : Window
                     ? "Managed autopilot relay completed one cycle and paused intentionally."
                     : $"Managed autopilot relay completed {turns} turns and paused intentionally.");
             await RefreshManagedStatusAsync(CancellationToken.None);
+        });
+    }
+
+    private async void RunManagedAutopilotLoopButton_Click(object sender, RoutedEventArgs e)
+    {
+        await RunOperationAsync("Running a managed autopilot desktop loop...", async () =>
+        {
+            var managedCardGameRoot = string.IsNullOrWhiteSpace(ManagedCardGameRootTextBox.Text)
+                ? @"D:\Unity\card game"
+                : ManagedCardGameRootTextBox.Text.Trim();
+            var turns = ParseManagedTurns();
+            var loopSessions = ParseManagedLoopSessions();
+
+            for (var sessionIndex = 1; sessionIndex <= loopSessions; sessionIndex++)
+            {
+                var autopilotPreparation = await PrepareManagedAutopilotSessionAsync(managedCardGameRoot, CancellationToken.None);
+                await RefreshManagedStatusAsync(CancellationToken.None);
+
+                if (!autopilotPreparation.ShouldStartRelay)
+                {
+                    StatusMessageTextBlock.Text = $"Managed autopilot loop stopped before session {sessionIndex}: {autopilotPreparation.StatusMessage}";
+                    return;
+                }
+
+                var prepared = await LoadPreparedManagedSessionAsync(CancellationToken.None);
+                WorkingDirectoryTextBox.Text = managedCardGameRoot;
+                SessionIdTextBox.Text = prepared.SessionId;
+                InitialPromptTextBox.Text = prepared.Prompt;
+                _currentAdmissionManifestPath = prepared.ManifestPath;
+                SaveUiSettings();
+
+                await EnsureBrokerAsync(CancellationToken.None, recreate: true);
+                await EnsureAdaptersReadyForSessionAsync();
+
+                await _broker!.StartSessionAsync(
+                    prepared.SessionId,
+                    AgentRole.Codex,
+                    prepared.Prompt,
+                    TryLoadSessionBootstrap(),
+                    CancellationToken.None);
+
+                await RunTurnBatchCoreAsync(
+                    turns,
+                    successPauseReason: turns == 2
+                        ? "Paused intentionally after one successful relay cycle."
+                        : $"Paused intentionally after {turns} managed relay turns.",
+                    successStatusMessage: turns == 2
+                        ? $"Managed autopilot loop session {sessionIndex} completed one cycle and paused intentionally."
+                        : $"Managed autopilot loop session {sessionIndex} completed {turns} turns and paused intentionally.");
+
+                var completionResult = await CompleteManagedRelaySessionAsync(
+                    managedCardGameRoot,
+                    prepared.ManifestPath,
+                    CancellationToken.None);
+                await RefreshManagedStatusAsync(CancellationToken.None);
+
+                if (completionResult.ExitCode != 0)
+                {
+                    var message = string.IsNullOrWhiteSpace(completionResult.ErrorText)
+                        ? "managed completion failed"
+                        : completionResult.ErrorText;
+                    StatusMessageTextBlock.Text = $"Managed autopilot loop stopped after session {sessionIndex}: {message}";
+                    return;
+                }
+            }
+
+            StatusMessageTextBlock.Text = $"Managed autopilot loop finished {loopSessions} session(s).";
         });
     }
 
@@ -939,6 +1007,7 @@ public partial class MainWindow : Window
         RunCycleButton.IsEnabled = !_isBusy;
         RunManagedCardGameButton.IsEnabled = !_isBusy;
         RunManagedAutopilotButton.IsEnabled = !_isBusy;
+        RunManagedAutopilotLoopButton.IsEnabled = !_isBusy;
         RefreshManagedStatusButton.IsEnabled = !_isBusy;
         AutoRunButton.IsEnabled = !_isBusy;
         PauseButton.IsEnabled = !_isBusy;
@@ -2452,6 +2521,16 @@ public partial class MainWindow : Window
         return 2;
     }
 
+    private int ParseManagedLoopSessions()
+    {
+        if (int.TryParse(ManagedLoopSessionsTextBox.Text?.Trim(), out var sessions) && sessions >= 1)
+        {
+            return Math.Min(sessions, 12);
+        }
+
+        return 3;
+    }
+
     private async Task<ManagedCardGamePreparation> PrepareManagedCardGameSessionAsync(
         string cardGameRoot,
         string taskSlug,
@@ -2641,6 +2720,34 @@ public partial class MainWindow : Window
         return JsonSerializer.Deserialize<ManagerSignalSummary>(result.OutputText, HandoffJson.SerializerOptions);
     }
 
+    private async Task<ProcessRunResult> CompleteManagedRelaySessionAsync(
+        string cardGameRoot,
+        string manifestPath,
+        CancellationToken cancellationToken)
+    {
+        var repoRoot = TryFindRelayRepositoryRoot()
+            ?? throw new InvalidOperationException("Could not locate the relay repository root from the desktop app.");
+        var scriptPath = Path.Combine(repoRoot, "scripts", "card-game", "Complete-CardGameRelaySession.ps1");
+        if (!File.Exists(scriptPath))
+        {
+            throw new FileNotFoundException("Managed completion script was not found.", scriptPath);
+        }
+
+        var arguments = string.Join(' ', new[]
+        {
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            QuotePowerShellArgument(scriptPath),
+            "-CardGameRoot",
+            QuotePowerShellArgument(cardGameRoot),
+            "-ManifestPath",
+            QuotePowerShellArgument(manifestPath)
+        });
+
+        return await RunPowerShellProcessAsync(arguments, cancellationToken);
+    }
+
     private async Task<ProcessRunResult> RunPowerShellProcessAsync(string arguments, CancellationToken cancellationToken)
     {
         var startInfo = new ProcessStartInfo
@@ -2709,6 +2816,7 @@ public partial class MainWindow : Window
                     ? "companion-depth-first-slice"
                     : settings.ManagedTaskSlug;
                 ManagedTurnsTextBox.Text = settings.ManagedTurns <= 1 ? "2" : settings.ManagedTurns.ToString();
+                ManagedLoopSessionsTextBox.Text = settings.ManagedLoopSessions <= 0 ? "3" : settings.ManagedLoopSessions.ToString();
                 _currentAdmissionManifestPath = settings.AdmissionManifestPath;
                 UseInteractiveAdaptersCheckBox.IsChecked = settings.UseInteractiveAdapters;
                 AutoApproveAllRequestsCheckBox.IsChecked = settings.AutoApproveAllRequests;
@@ -2719,6 +2827,7 @@ public partial class MainWindow : Window
                 ManagedCardGameRootTextBox.Text = @"D:\Unity\card game";
                 ManagedTaskSlugTextBox.Text = "companion-depth-first-slice";
                 ManagedTurnsTextBox.Text = "2";
+                ManagedLoopSessionsTextBox.Text = "3";
             }
         }
         catch
@@ -2727,6 +2836,7 @@ public partial class MainWindow : Window
             ManagedCardGameRootTextBox.Text = @"D:\Unity\card game";
             ManagedTaskSlugTextBox.Text = "companion-depth-first-slice";
             ManagedTurnsTextBox.Text = "2";
+            ManagedLoopSessionsTextBox.Text = "3";
         }
         finally
         {
@@ -2748,6 +2858,7 @@ public partial class MainWindow : Window
                 ManagedCardGameRoot = ManagedCardGameRootTextBox.Text?.Trim(),
                 ManagedTaskSlug = ManagedTaskSlugTextBox.Text?.Trim(),
                 ManagedTurns = ParseManagedTurns(),
+                ManagedLoopSessions = ParseManagedLoopSessions(),
                 UseInteractiveAdapters = UseInteractiveAdaptersCheckBox.IsChecked.GetValueOrDefault(),
                 AutoApproveAllRequests = AutoApproveAllRequestsCheckBox.IsChecked.GetValueOrDefault()
             };

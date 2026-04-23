@@ -78,6 +78,12 @@
                          Padding="8"
                          Text="2" />
 
+                <TextBlock Margin="0,12,0,0" FontWeight="SemiBold" Text="Managed Loop Sessions" />
+                <TextBox x:Name="ManagedLoopSessionsTextBox"
+                         Margin="0,6,0,0"
+                         Padding="8"
+                         Text="3" />
+
                 <CheckBox x:Name="UseInteractiveAdaptersCheckBox"
                           Margin="0,12,0,0"
                           Content="Use interactive adapters (experimental; Codex uses app-server, Claude uses stream-json)" />
@@ -247,6 +253,12 @@
                         Margin="0,0,8,0"
                         Click="RunManagedAutopilotButton_Click"
                         Content="Managed Autopilot Run" />
+                <Button x:Name="RunManagedAutopilotLoopButton"
+                        Width="200"
+                        Height="34"
+                        Margin="0,0,8,0"
+                        Click="RunManagedAutopilotLoopButton_Click"
+                        Content="Managed Autopilot Loop" />
                 <Button x:Name="RefreshManagedStatusButton"
                         Width="180"
                         Height="34"
