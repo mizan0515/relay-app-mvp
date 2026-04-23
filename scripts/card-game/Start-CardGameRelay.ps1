@@ -32,6 +32,12 @@ $skillResolverJsonPath = Join-Path $repoRoot 'profiles\card-game\generated-skill
 $skillResolverMarkdownPath = Join-Path $repoRoot 'profiles\card-game\generated-skill-resolver.md'
 $governanceJsonPath = Join-Path $repoRoot 'profiles\card-game\generated-governance-status.json'
 $governanceTextPath = Join-Path $repoRoot 'profiles\card-game\generated-governance-status.txt'
+$agentIdentityJsonPath = Join-Path $repoRoot 'profiles\card-game\generated-agent-identity-status.json'
+$agentIdentityTextPath = Join-Path $repoRoot 'profiles\card-game\generated-agent-identity-status.txt'
+$toolRegistryJsonPath = Join-Path $repoRoot 'profiles\card-game\generated-tool-registry-status.json'
+$toolRegistryTextPath = Join-Path $repoRoot 'profiles\card-game\generated-tool-registry-status.txt'
+$policyRegistryJsonPath = Join-Path $repoRoot 'profiles\card-game\generated-policy-registry-status.json'
+$policyRegistryTextPath = Join-Path $repoRoot 'profiles\card-game\generated-policy-registry-status.txt'
 $routeLearningPath = Join-Path $repoRoot 'docs\card-game-integration\learning-memory\route-outcomes.jsonl'
 $heuristicsJsonPath = Join-Path $repoRoot 'docs\card-game-integration\learning-memory\heuristics.json'
 $heuristicsMarkdownPath = Join-Path $repoRoot 'docs\card-game-integration\learning-memory\heuristics.md'
@@ -78,6 +84,24 @@ powershell -ExecutionPolicy Bypass -File (Join-Path $scriptRoot 'Get-CardGameGov
   -OutputJsonPath $governanceJsonPath `
   -OutputTextPath $governanceTextPath | Out-Null
 
+powershell -ExecutionPolicy Bypass -File (Join-Path $scriptRoot 'Get-CardGameAgentIdentityStatus.ps1') `
+  -ManifestPath $resolvedManifestPath `
+  -LoopStatusPath $loopStatusJsonPath `
+  -OutputJsonPath $agentIdentityJsonPath `
+  -OutputTextPath $agentIdentityTextPath | Out-Null
+
+powershell -ExecutionPolicy Bypass -File (Join-Path $scriptRoot 'Get-CardGameToolRegistryStatus.ps1') `
+  -ManifestPath $resolvedManifestPath `
+  -LoopStatusPath $loopStatusJsonPath `
+  -OutputJsonPath $toolRegistryJsonPath `
+  -OutputTextPath $toolRegistryTextPath | Out-Null
+
+powershell -ExecutionPolicy Bypass -File (Join-Path $scriptRoot 'Get-CardGamePolicyRegistryStatus.ps1') `
+  -ManifestPath $resolvedManifestPath `
+  -LoopStatusPath $loopStatusJsonPath `
+  -OutputJsonPath $policyRegistryJsonPath `
+  -OutputTextPath $policyRegistryTextPath | Out-Null
+
 if ($executionMode -ne 'relay-dad') {
   powershell -ExecutionPolicy Bypass -File (Join-Path $scriptRoot 'Write-CardGameDirectPrompt.ps1') `
     -ManifestPath $resolvedManifestPath `
@@ -120,6 +144,9 @@ if ($PrepareOnly) {
   Write-Host "Execution route: $executionRouteMarkdownPath"
   Write-Host "Skill resolver: $skillResolverMarkdownPath"
   Write-Host "Governance: $governanceTextPath"
+  Write-Host "Agent identity: $agentIdentityTextPath"
+  Write-Host "Tool registry: $toolRegistryTextPath"
+  Write-Host "Policy registry: $policyRegistryTextPath"
   if (Test-Path -LiteralPath $directPromptPath) {
     Write-Host "Direct prompt: $directPromptPath"
   }
@@ -156,6 +183,9 @@ if (-not $ForceRelay -and $executionMode -ne 'relay-dad') {
   Write-Host "Execution route: $executionRouteMarkdownPath"
   Write-Host "Skill resolver: $skillResolverMarkdownPath"
   Write-Host "Governance: $governanceTextPath"
+  Write-Host "Agent identity: $agentIdentityTextPath"
+  Write-Host "Tool registry: $toolRegistryTextPath"
+  Write-Host "Policy registry: $policyRegistryTextPath"
   if (Test-Path -LiteralPath $directPromptPath) {
     Write-Host "Direct prompt: $directPromptPath"
   }

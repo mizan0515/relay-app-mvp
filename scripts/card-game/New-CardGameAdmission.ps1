@@ -292,6 +292,65 @@ function Resolve-SkillPaths {
   return $resolved.ToArray()
 }
 
+function Get-AgentIdentityProfiles {
+  param(
+    [string]$Bucket,
+    [string]$ExecutionMode
+  )
+
+  $profiles = New-Object 'System.Collections.Generic.List[string]'
+  $profiles.Add('cardgame-autopilot-manager')
+
+  switch ($ExecutionMode) {
+    'relay-dad' {
+      $profiles.Add('cardgame-relay-codex-peer')
+      $profiles.Add('cardgame-relay-claude-peer')
+    }
+    'direct-codex' {
+      $profiles.Add('cardgame-route-direct-codex')
+    }
+    'docs-lite' {
+      $profiles.Add('cardgame-route-direct-codex')
+    }
+  }
+
+  if ($Bucket -in @('battle-runtime', 'map-runtime', 'qa-editor', 'ui-runtime')) {
+    $profiles.Add('cardgame-unity-mcp-bridge')
+  }
+
+  return @($profiles | Select-Object -Unique)
+}
+
+function Get-ApprovedToolProfiles {
+  param(
+    [string]$Bucket,
+    [string]$ExecutionMode
+  )
+
+  $profiles = New-Object 'System.Collections.Generic.List[string]'
+  $profiles.Add('cardgame-compact-artifact-surface') | Out-Null
+  $profiles.Add('cardgame-powershell-runbooks') | Out-Null
+
+  switch ($ExecutionMode) {
+    'relay-dad' {
+      $profiles.Add('cardgame-relay-codex-cli') | Out-Null
+      $profiles.Add('cardgame-relay-claude-cli') | Out-Null
+    }
+    'direct-codex' {
+      $profiles.Add('cardgame-direct-codex-local') | Out-Null
+    }
+    'docs-lite' {
+      $profiles.Add('cardgame-direct-codex-local') | Out-Null
+    }
+  }
+
+  if ($Bucket -in @('battle-runtime', 'map-runtime', 'qa-editor', 'ui-runtime')) {
+    $profiles.Add('cardgame-unity-mcp-approved') | Out-Null
+  }
+
+  return @($profiles | Select-Object -Unique)
+}
+
 $backlogLines = if (Test-Path $backlogPath) { Get-Content -LiteralPath $backlogPath -Encoding UTF8 } else { @() }
 $stateLines = if (Test-Path $statePath) { Get-Content -LiteralPath $statePath -Encoding UTF8 } else { @() }
 $operatorDecisionLines = if (Test-Path $operatorDecisionsPath) { Get-Content -LiteralPath $operatorDecisionsPath -Encoding UTF8 } else { @() }
@@ -314,6 +373,12 @@ if ($contextSurface -and $contextSurface.buckets) {
   $bucketSurface = $contextSurface.buckets | Where-Object { $_.bucket -eq $bucket } | Select-Object -First 1
 }
 $executionMode = Get-ExecutionModeGuidance -Bucket $bucket -BucketSurface $bucketSurface -BucketHeuristic $bucketHeuristic
+$agentIdentityProfiles = Get-AgentIdentityProfiles -Bucket $bucket -ExecutionMode $executionMode.mode
+$approvedToolProfiles = Get-ApprovedToolProfiles -Bucket $bucket -ExecutionMode $executionMode.mode
+$activePolicyProfiles = @('cardgame-compact-artifacts-only', 'cardgame-no-full-log-tail')
+if ($bucket -eq 'qa-editor') { $activePolicyProfiles += 'cardgame-no-web-for-unity-local' }
+if ($bucket -in @('battle-runtime', 'map-runtime', 'qa-editor', 'ui-runtime')) { $activePolicyProfiles += 'cardgame-require-unity-mcp-proof' }
+$activePolicyProfiles = @($activePolicyProfiles | Select-Object -Unique)
 $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $taskSummary = $item.Summary
 $rawBacklogLine = $item.Raw
@@ -375,13 +440,23 @@ $manifest = [ordered]@{
       full_log_tail = 'never read or tail the full relay JSONL log during routine operation; use compact signal/evidence artifacts only'
       web = 'for Unity-local qa-editor slices, do not browse the web unless the operator explicitly asks for external research'
     }
+    approved_tool_ids = @($approvedToolProfiles)
+    tool_registry_path = 'D:\cardgame-dad-relay\profiles\card-game\tool-registry.json'
+    active_policy_ids = @($activePolicyProfiles)
+    policy_registry_path = 'D:\cardgame-dad-relay\profiles\card-game\policy-registry.json'
     enforcement_notes = @(
       'required_evidence is enforced by loop status and completion write-back',
       'required_skills must be opened from required_skill_paths before broad repo exploration',
-      'forbidden_tools is a prompt/operator contract unless a deterministic gate already exists'
+      'forbidden_tools is a prompt/operator contract unless a deterministic gate already exists',
+      'approved_tool_ids must resolve through the central tool registry before the slice is trusted',
+      'active_policy_ids must resolve through the central policy registry before the slice is trusted'
     )
     verification_expectation = 'Use the narrowest compile/test/Unity QA path that can close this slice.'
     token_policy = 'Reuse stable prefix, keep one narrow slice, avoid broad repo search.'
+    agent_identity_profiles = @($agentIdentityProfiles)
+    agent_identity_policy = 'Every autopilot, relay, route, and Unity-MCP role must resolve to a distinct registered identity before the slice is trusted.'
+    tool_registry_policy = 'Every active runtime, script runner, relay peer, and Unity MCP bridge must resolve to a centrally registered approved tool before execution continues.'
+    policy_registry_policy = 'Every active compact-policy contract must resolve to a centrally registered policy before the slice is trusted.'
     execution_mode = $executionMode
     admission_warnings = @($admissionWarnings)
     backlog_health = if ($backlogHealth) {

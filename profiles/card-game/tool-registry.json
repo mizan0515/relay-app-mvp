@@ -1,0 +1,171 @@
+{
+  "version": 1,
+  "tools": [
+    {
+      "id": "cardgame-compact-artifact-surface",
+      "kind": "compact-surface",
+      "description": "Compact JSON/TXT governance, manager, evidence, and dashboard artifacts used by the operator path.",
+      "approved_buckets": [
+        "battle-runtime",
+        "docs-or-autopilot",
+        "general",
+        "map-runtime",
+        "network-runtime",
+        "qa-editor",
+        "ui-runtime"
+      ],
+      "approved_execution_modes": [
+        "direct-codex",
+        "docs-lite",
+        "relay-dad"
+      ],
+      "tool_classes": [
+        "compact-artifact"
+      ],
+      "used_by_identity_ids": [
+        "cardgame-autopilot-manager",
+        "cardgame-route-direct-codex",
+        "cardgame-relay-codex-peer",
+        "cardgame-relay-claude-peer"
+      ],
+      "data_access_scope": "compact-generated-artifacts-only"
+    },
+    {
+      "id": "cardgame-powershell-runbooks",
+      "kind": "script-runner",
+      "description": "Approved local PowerShell control path for admission, route, governance, and write-back scripts.",
+      "approved_buckets": [
+        "battle-runtime",
+        "docs-or-autopilot",
+        "general",
+        "map-runtime",
+        "network-runtime",
+        "qa-editor",
+        "ui-runtime"
+      ],
+      "approved_execution_modes": [
+        "direct-codex",
+        "docs-lite",
+        "relay-dad"
+      ],
+      "tool_classes": [
+        "powershell-script"
+      ],
+      "used_by_identity_ids": [
+        "cardgame-autopilot-manager"
+      ],
+      "data_access_scope": "repo-local-control-plane"
+    },
+    {
+      "id": "cardgame-direct-codex-local",
+      "kind": "model-runtime",
+      "description": "Local Codex execution path for direct-Codex or docs-lite slices.",
+      "approved_buckets": [
+        "battle-runtime",
+        "docs-or-autopilot",
+        "general",
+        "map-runtime",
+        "network-runtime",
+        "ui-runtime"
+      ],
+      "approved_execution_modes": [
+        "direct-codex",
+        "docs-lite"
+      ],
+      "tool_classes": [
+        "code-edit",
+        "compile-test"
+      ],
+      "used_by_identity_ids": [
+        "cardgame-route-direct-codex"
+      ],
+      "data_access_scope": "local-workspace"
+    },
+    {
+      "id": "cardgame-relay-codex-cli",
+      "kind": "model-runtime",
+      "description": "Codex CLI peer runtime inside bounded relay sessions.",
+      "approved_buckets": [
+        "battle-runtime",
+        "docs-or-autopilot",
+        "general",
+        "map-runtime",
+        "network-runtime",
+        "qa-editor",
+        "ui-runtime"
+      ],
+      "approved_execution_modes": [
+        "relay-dad"
+      ],
+      "tool_classes": [
+        "code-edit",
+        "compile-test"
+      ],
+      "used_by_identity_ids": [
+        "cardgame-relay-codex-peer"
+      ],
+      "data_access_scope": "relay-peer-local-workspace"
+    },
+    {
+      "id": "cardgame-relay-claude-cli",
+      "kind": "model-runtime",
+      "description": "Claude Code peer runtime inside bounded relay sessions.",
+      "approved_buckets": [
+        "battle-runtime",
+        "docs-or-autopilot",
+        "general",
+        "map-runtime",
+        "network-runtime",
+        "qa-editor",
+        "ui-runtime"
+      ],
+      "approved_execution_modes": [
+        "relay-dad"
+      ],
+      "tool_classes": [
+        "code-edit",
+        "compile-test"
+      ],
+      "used_by_identity_ids": [
+        "cardgame-relay-claude-peer"
+      ],
+      "data_access_scope": "relay-peer-local-workspace"
+    },
+    {
+      "id": "cardgame-unity-mcp-approved",
+      "kind": "mcp-server",
+      "description": "Approved Unity MCP bridge for deterministic editor verification and QA flows.",
+      "approved_buckets": [
+        "battle-runtime",
+        "map-runtime",
+        "qa-editor",
+        "ui-runtime"
+      ],
+      "approved_execution_modes": [
+        "direct-codex",
+        "relay-dad"
+      ],
+      "tool_classes": [
+        "unity-verification"
+      ],
+      "used_by_identity_ids": [
+        "cardgame-unity-mcp-bridge",
+        "cardgame-relay-codex-peer",
+        "cardgame-relay-claude-peer",
+        "cardgame-route-direct-codex"
+      ],
+      "approved_mcp_servers": [
+        "unityMCP"
+      ],
+      "approved_mcp_tools": [
+        "execute_menu_item",
+        "get_test_job",
+        "manage_editor",
+        "read_console",
+        "refresh_unity",
+        "run_tests"
+      ],
+      "data_access_scope": "unity-editor-proof-only"
+    }
+  ]
+}

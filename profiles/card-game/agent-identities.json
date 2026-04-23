@@ -1,0 +1,139 @@
+{
+  "version": 1,
+  "identities": [
+    {
+      "id": "cardgame-autopilot-manager",
+      "kind": "orchestrator",
+      "description": "Owns compact loop orchestration, admission, governance refresh, and terminal write-back.",
+      "allowed_buckets": [
+        "battle-runtime",
+        "docs-or-autopilot",
+        "general",
+        "map-runtime",
+        "network-runtime",
+        "qa-editor",
+        "ui-runtime"
+      ],
+      "allowed_execution_modes": [
+        "direct-codex",
+        "docs-lite",
+        "relay-dad"
+      ],
+      "allowed_compact_artifacts": [
+        "governance",
+        "manager-signal",
+        "ops-dashboard",
+        "relay-evidence",
+        "relay-signal",
+        "required-evidence",
+        "runbook",
+        "skill-resolver",
+        "tool-policy"
+      ],
+      "allowed_tool_classes": [
+        "compact-artifact",
+        "powershell-script",
+        "route-artifact"
+      ],
+      "revocation_scope": "manager-only"
+    },
+    {
+      "id": "cardgame-route-direct-codex",
+      "kind": "worker",
+      "description": "Executes direct-Codex or docs-lite slices when routing chooses the cheapest safe path.",
+      "allowed_buckets": [
+        "battle-runtime",
+        "docs-or-autopilot",
+        "general",
+        "map-runtime",
+        "network-runtime",
+        "ui-runtime"
+      ],
+      "allowed_execution_modes": [
+        "direct-codex",
+        "docs-lite"
+      ],
+      "allowed_tool_classes": [
+        "code-edit",
+        "compile-test",
+        "compact-artifact"
+      ],
+      "revocation_scope": "direct-route-only"
+    },
+    {
+      "id": "cardgame-relay-codex-peer",
+      "kind": "peer",
+      "description": "Codex-side peer inside bounded relay sessions.",
+      "allowed_buckets": [
+        "battle-runtime",
+        "docs-or-autopilot",
+        "general",
+        "map-runtime",
+        "network-runtime",
+        "qa-editor",
+        "ui-runtime"
+      ],
+      "allowed_execution_modes": [
+        "relay-dad"
+      ],
+      "allowed_tool_classes": [
+        "code-edit",
+        "compact-artifact",
+        "compile-test",
+        "unity-verification"
+      ],
+      "revocation_scope": "relay-peer-only"
+    },
+    {
+      "id": "cardgame-relay-claude-peer",
+      "kind": "peer",
+      "description": "Claude-side peer inside bounded relay sessions.",
+      "allowed_buckets": [
+        "battle-runtime",
+        "docs-or-autopilot",
+        "general",
+        "map-runtime",
+        "network-runtime",
+        "qa-editor",
+        "ui-runtime"
+      ],
+      "allowed_execution_modes": [
+        "relay-dad"
+      ],
+      "allowed_tool_classes": [
+        "code-edit",
+        "compact-artifact",
+        "compile-test",
+        "unity-verification"
+      ],
+      "revocation_scope": "relay-peer-only"
+    },
+    {
+      "id": "cardgame-unity-mcp-bridge",
+      "kind": "tool-bridge",
+      "description": "Owns Unity MCP verification traffic for qa-editor and other Unity proof slices.",
+      "allowed_buckets": [
+        "battle-runtime",
+        "map-runtime",
+        "qa-editor",
+        "ui-runtime"
+      ],
+      "allowed_execution_modes": [
+        "direct-codex",
+        "relay-dad"
+      ],
+      "allowed_mcp_servers": [
+        "unityMCP"
+      ],
+      "allowed_mcp_tools": [
+        "execute_menu_item",
+        "get_test_job",
+        "manage_editor",
+        "read_console",
+        "refresh_unity",
+        "run_tests"
+      ],
+      "revocation_scope": "unity-mcp-only"
+    }
+  ]
+}

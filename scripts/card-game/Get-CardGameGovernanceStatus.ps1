@@ -21,12 +21,18 @@ if (-not $OutputTextPath) {
 $requiredEvidenceOutputPath = Join-Path $repoRoot 'profiles\card-game\generated-required-evidence-status.json'
 $skillResolverOutputPath = Join-Path $repoRoot 'profiles\card-game\generated-skill-resolver.json'
 $toolPolicyOutputPath = Join-Path $repoRoot 'profiles\card-game\generated-tool-policy-status.json'
+$agentIdentityOutputPath = Join-Path $repoRoot 'profiles\card-game\generated-agent-identity-status.json'
+$toolRegistryOutputPath = Join-Path $repoRoot 'profiles\card-game\generated-tool-registry-status.json'
+$policyRegistryOutputPath = Join-Path $repoRoot 'profiles\card-game\generated-policy-registry-status.json'
 $remediationStatusPath = Join-Path $CardGameRoot '.autopilot\generated\relay-remediation-status.json'
 $unityVerificationRetryLimit = 2
 
 $requiredEvidence = $null
 $skillResolver = $null
 $toolPolicy = $null
+$agentIdentity = $null
+$toolRegistry = $null
+$policyRegistry = $null
 $remediationStatus = $null
 $unityVerificationRetryCount = 0
 
@@ -52,6 +58,33 @@ try {
     -OutputJsonPath $skillResolverOutputPath | ConvertFrom-Json
 } catch {
   $skillResolver = $null
+}
+
+try {
+  $agentIdentity = & powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'Get-CardGameAgentIdentityStatus.ps1') `
+    -ManifestPath $ManifestPath `
+    -LoopStatusPath (Join-Path $repoRoot 'profiles\card-game\generated-loop-status.json') `
+    -OutputJsonPath $agentIdentityOutputPath | ConvertFrom-Json
+} catch {
+  $agentIdentity = $null
+}
+
+try {
+  $toolRegistry = & powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'Get-CardGameToolRegistryStatus.ps1') `
+    -ManifestPath $ManifestPath `
+    -LoopStatusPath (Join-Path $repoRoot 'profiles\card-game\generated-loop-status.json') `
+    -OutputJsonPath $toolRegistryOutputPath | ConvertFrom-Json
+} catch {
+  $toolRegistry = $null
+}
+
+try {
+  $policyRegistry = & powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'Get-CardGamePolicyRegistryStatus.ps1') `
+    -ManifestPath $ManifestPath `
+    -LoopStatusPath (Join-Path $repoRoot 'profiles\card-game\generated-loop-status.json') `
+    -OutputJsonPath $policyRegistryOutputPath | ConvertFrom-Json
+} catch {
+  $policyRegistry = $null
 }
 
 try {
@@ -90,6 +123,21 @@ if ($skillResolver -and -not $skillResolver.all_required_skills_present) {
   $attentionRequired = $true
   $reason = 'missing_required_skills'
 }
+elseif ($agentIdentity -and [string]$agentIdentity.status -ne 'ok') {
+  $status = 'blocked'
+  $attentionRequired = $true
+  $reason = 'missing_agent_identity'
+}
+elseif ($toolRegistry -and [string]$toolRegistry.status -ne 'ok') {
+  $status = 'blocked'
+  $attentionRequired = $true
+  $reason = 'unregistered_tool'
+}
+elseif ($policyRegistry -and [string]$policyRegistry.status -ne 'ok') {
+  $status = 'blocked'
+  $attentionRequired = $true
+  $reason = 'missing_policy_registration'
+}
 elseif ($requiredEvidence -and -not $requiredEvidence.all_required_evidence_present) {
   $status = 'blocked'
   $attentionRequired = $true
@@ -125,6 +173,30 @@ switch ($reason) {
     $recommendedAction = 'Restore the missing skill file or fix the required skill path before running this slice again.'
     $recommendedActionId = 'open_skill_resolver'
     $recommendedActionLabel = 'Open Skill Resolver'
+  }
+  'missing_agent_identity' {
+    $blockerArtifactPath = $agentIdentityOutputPath
+    $blockerHint = 'Open the agent-identity artifact and restore the missing or unregistered role identity before trusting this slice.'
+    $blockerDetail = ((@($agentIdentity.missing_identity_ids) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join ', ')
+    $recommendedAction = 'Register the missing agent identity or fix the role-to-identity mapping before continuing this slice.'
+    $recommendedActionId = 'open_agent_identity'
+    $recommendedActionLabel = 'Open Agent Identity'
+  }
+  'unregistered_tool' {
+    $blockerArtifactPath = $toolRegistryOutputPath
+    $blockerHint = 'Open the tool-registry artifact and restore the missing or unregistered approved tool before running this slice.'
+    $blockerDetail = ((@($toolRegistry.missing_tool_ids) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join ', ')
+    $recommendedAction = 'Register the missing approved tool or fix the tool-to-bucket mapping before continuing this slice.'
+    $recommendedActionId = 'open_tool_registry'
+    $recommendedActionLabel = 'Open Tool Registry'
+  }
+  'missing_policy_registration' {
+    $blockerArtifactPath = $policyRegistryOutputPath
+    $blockerHint = 'Open the policy-registry artifact and restore the missing or unregistered active policy before running this slice.'
+    $blockerDetail = ((@($policyRegistry.missing_policy_ids) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join ', ')
+    $recommendedAction = 'Register the missing central policy or fix the policy-to-bucket mapping before continuing this slice.'
+    $recommendedActionId = 'open_policy_registry'
+    $recommendedActionLabel = 'Open Policy Registry'
   }
   'missing_required_evidence' {
     $blockerArtifactPath = $requiredEvidenceOutputPath
@@ -207,6 +279,21 @@ $summary = [pscustomobject]@{
   attention_required = $attentionRequired
   skill_resolver_status = if ($skillResolver) { [string]$skillResolver.status } else { '' }
   skill_resolver_marker = if ($skillResolver) { [string]$skillResolver.summary_marker } else { '' }
+  agent_identity_status = if ($agentIdentity) { [string]$agentIdentity.status } else { '' }
+  agent_identity_path = $agentIdentityOutputPath
+  agent_identity_marker = if ($agentIdentity) { [string]$agentIdentity.summary_marker } else { '' }
+  active_agent_identity_ids = if ($agentIdentity) { @($agentIdentity.active_identity_ids) } else { @() }
+  missing_agent_identity_ids = if ($agentIdentity) { @($agentIdentity.missing_identity_ids) } else { @() }
+  tool_registry_status = if ($toolRegistry) { [string]$toolRegistry.status } else { '' }
+  tool_registry_path = $toolRegistryOutputPath
+  tool_registry_marker = if ($toolRegistry) { [string]$toolRegistry.summary_marker } else { '' }
+  active_tool_ids = if ($toolRegistry) { @($toolRegistry.active_tool_ids) } else { @() }
+  missing_tool_ids = if ($toolRegistry) { @($toolRegistry.missing_tool_ids) } else { @() }
+  policy_registry_status = if ($policyRegistry) { [string]$policyRegistry.status } else { '' }
+  policy_registry_path = $policyRegistryOutputPath
+  policy_registry_marker = if ($policyRegistry) { [string]$policyRegistry.summary_marker } else { '' }
+  active_policy_ids = if ($policyRegistry) { @($policyRegistry.active_policy_ids) } else { @() }
+  missing_policy_ids = if ($policyRegistry) { @($policyRegistry.missing_policy_ids) } else { @() }
   required_evidence_status = if ($requiredEvidence) { [string]$requiredEvidence.status } else { '' }
   required_evidence_path = $requiredEvidenceOutputPath
   required_evidence_marker = if ($requiredEvidence) { [string]$requiredEvidence.summary_marker } else { '' }
@@ -241,6 +328,9 @@ $summary | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $OutputJsonPath -E
 @(
   $summary.summary_marker
   $summary.skill_resolver_marker
+  $summary.agent_identity_marker
+  $summary.tool_registry_marker
+  $summary.policy_registry_marker
   $summary.required_evidence_marker
   $summary.tool_policy_marker
 ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Set-Content -LiteralPath $OutputTextPath -Encoding UTF8

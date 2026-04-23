@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "policies": [
+    {
+      "id": "cardgame-compact-artifacts-only",
+      "description": "Routine operator and LLM status checks must use compact artifacts instead of full logs.",
+      "applies_to_buckets": [
+        "battle-runtime",
+        "docs-or-autopilot",
+        "general",
+        "map-runtime",
+        "network-runtime",
+        "qa-editor",
+        "ui-runtime"
+      ],
+      "applies_to_execution_modes": [
+        "direct-codex",
+        "docs-lite",
+        "relay-dad"
+      ],
+      "enforcement_plane": "deterministic-governance"
+    },
+    {
+      "id": "cardgame-no-full-log-tail",
+      "description": "Do not read or tail the full relay JSONL log during routine operation.",
+      "applies_to_buckets": [
+        "battle-runtime",
+        "docs-or-autopilot",
+        "general",
+        "map-runtime",
+        "network-runtime",
+        "qa-editor",
+        "ui-runtime"
+      ],
+      "applies_to_execution_modes": [
+        "direct-codex",
+        "docs-lite",
+        "relay-dad"
+      ],
+      "enforcement_plane": "tool-policy"
+    },
+    {
+      "id": "cardgame-no-web-for-unity-local",
+      "description": "Unity-local qa-editor slices must not browse the web unless the operator explicitly requests external research.",
+      "applies_to_buckets": [
+        "qa-editor"
+      ],
+      "applies_to_execution_modes": [
+        "direct-codex",
+        "relay-dad"
+      ],
+      "enforcement_plane": "tool-policy"
+    },
+    {
+      "id": "cardgame-require-unity-mcp-proof",
+      "description": "Unity-facing slices must produce compact Unity MCP evidence before completion.",
+      "applies_to_buckets": [
+        "battle-runtime",
+        "map-runtime",
+        "qa-editor",
+        "ui-runtime"
+      ],
+      "applies_to_execution_modes": [
+        "direct-codex",
+        "relay-dad"
+      ],
+      "enforcement_plane": "required-evidence"
+    }
+  ]
+}

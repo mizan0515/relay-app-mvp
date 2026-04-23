@@ -29,6 +29,9 @@ if (-not $SkillResolverPath) {
 }
 $skillBundlePath = Join-Path $repoRoot 'profiles\card-game\generated-skill-bundle.md'
 $governancePath = Join-Path $repoRoot 'profiles\card-game\generated-governance-status.json'
+$agentIdentityPath = Join-Path $repoRoot 'profiles\card-game\generated-agent-identity-status.json'
+$toolRegistryPath = Join-Path $repoRoot 'profiles\card-game\generated-tool-registry-status.json'
+$policyRegistryPath = Join-Path $repoRoot 'profiles\card-game\generated-policy-registry-status.json'
 $remediationStatusPath = Join-Path $CardGameRoot '.autopilot\generated\relay-remediation-status.json'
 if (-not $HeuristicsPath) {
   $HeuristicsPath = Join-Path $repoRoot 'docs\card-game-integration\learning-memory\heuristics.json'
@@ -79,6 +82,9 @@ $contextSurface = if (Test-Path -LiteralPath $ContextSurfacePath) { Get-Content 
 $executionRoute = if (Test-Path -LiteralPath $ExecutionRoutePath) { Get-Content -Raw -LiteralPath $ExecutionRoutePath -Encoding UTF8 | ConvertFrom-Json } else { $null }
 $skillResolver = if (Test-Path -LiteralPath $SkillResolverPath) { Get-Content -Raw -LiteralPath $SkillResolverPath -Encoding UTF8 | ConvertFrom-Json } else { $null }
 $governance = if (Test-Path -LiteralPath $governancePath) { Get-Content -Raw -LiteralPath $governancePath -Encoding UTF8 | ConvertFrom-Json } else { $null }
+$agentIdentity = if (Test-Path -LiteralPath $agentIdentityPath) { Get-Content -Raw -LiteralPath $agentIdentityPath -Encoding UTF8 | ConvertFrom-Json } else { $null }
+$toolRegistry = if (Test-Path -LiteralPath $toolRegistryPath) { Get-Content -Raw -LiteralPath $toolRegistryPath -Encoding UTF8 | ConvertFrom-Json } else { $null }
+$policyRegistry = if (Test-Path -LiteralPath $policyRegistryPath) { Get-Content -Raw -LiteralPath $policyRegistryPath -Encoding UTF8 | ConvertFrom-Json } else { $null }
 $remediation = if (Test-Path -LiteralPath $remediationStatusPath) { Get-Content -Raw -LiteralPath $remediationStatusPath -Encoding UTF8 | ConvertFrom-Json } else { $null }
 $heuristics = if (Test-Path -LiteralPath $HeuristicsPath) { Get-Content -Raw -LiteralPath $HeuristicsPath -Encoding UTF8 | ConvertFrom-Json } else { $null }
 
@@ -131,6 +137,39 @@ $dashboard = [ordered]@{
   skill_bundle = [ordered]@{
     path = if (Test-Path -LiteralPath $skillBundlePath) { $skillBundlePath } else { '' }
     present = (Test-Path -LiteralPath $skillBundlePath)
+  }
+  agent_identity = if ($agentIdentity) {
+    [ordered]@{
+      status = [string]$agentIdentity.status
+      marker = [string]$agentIdentity.summary_marker
+      active_ids = @($agentIdentity.active_identity_ids)
+      missing_ids = @($agentIdentity.missing_identity_ids)
+      path = $agentIdentityPath
+    }
+  } else {
+    $null
+  }
+  tool_registry = if ($toolRegistry) {
+    [ordered]@{
+      status = [string]$toolRegistry.status
+      marker = [string]$toolRegistry.summary_marker
+      active_ids = @($toolRegistry.active_tool_ids)
+      missing_ids = @($toolRegistry.missing_tool_ids)
+      path = $toolRegistryPath
+    }
+  } else {
+    $null
+  }
+  policy_registry = if ($policyRegistry) {
+    [ordered]@{
+      status = [string]$policyRegistry.status
+      marker = [string]$policyRegistry.summary_marker
+      active_ids = @($policyRegistry.active_policy_ids)
+      missing_ids = @($policyRegistry.missing_policy_ids)
+      path = $policyRegistryPath
+    }
+  } else {
+    $null
   }
   governance = if ($governance) {
     [ordered]@{
@@ -252,6 +291,49 @@ if ($dashboard.skill_bundle.present) {
   $lines.Add('- Bundle: ' + $dashboard.skill_bundle.path)
 }
 $lines.Add('')
+$lines.Add('## Agent Identity')
+$lines.Add('')
+if ($dashboard.agent_identity) {
+  $lines.Add('- Status: ' + $dashboard.agent_identity.status)
+  $lines.Add('- Marker: ' + $dashboard.agent_identity.marker)
+  if ($dashboard.agent_identity.path) { $lines.Add('- Artifact: ' + $dashboard.agent_identity.path) }
+  foreach ($identityId in @($dashboard.agent_identity.active_ids)) {
+    $lines.Add('- Active identity: ' + [string]$identityId)
+  }
+  foreach ($identityId in @($dashboard.agent_identity.missing_ids)) {
+    $lines.Add('- Missing identity: ' + [string]$identityId)
+  }
+}
+$lines.Add('')
+if ($dashboard.tool_registry) {
+  $lines.Add('## Tool Registry')
+  $lines.Add('')
+  $lines.Add('- Status: ' + $dashboard.tool_registry.status)
+  $lines.Add('- Marker: ' + $dashboard.tool_registry.marker)
+  if ($dashboard.tool_registry.path) { $lines.Add('- Artifact: ' + $dashboard.tool_registry.path) }
+  foreach ($toolId in @($dashboard.tool_registry.active_ids)) {
+    $lines.Add('- Active tool: ' + [string]$toolId)
+  }
+  foreach ($toolId in @($dashboard.tool_registry.missing_ids)) {
+    $lines.Add('- Missing tool: ' + [string]$toolId)
+  }
+  $lines.Add('')
+}
+$lines.Add('')
+if ($dashboard.policy_registry) {
+  $lines.Add('## Policy Registry')
+  $lines.Add('')
+  $lines.Add('- Status: ' + $dashboard.policy_registry.status)
+  $lines.Add('- Marker: ' + $dashboard.policy_registry.marker)
+  if ($dashboard.policy_registry.path) { $lines.Add('- Artifact: ' + $dashboard.policy_registry.path) }
+  foreach ($policyId in @($dashboard.policy_registry.active_ids)) {
+    $lines.Add('- Active policy: ' + [string]$policyId)
+  }
+  foreach ($policyId in @($dashboard.policy_registry.missing_ids)) {
+    $lines.Add('- Missing policy: ' + [string]$policyId)
+  }
+  $lines.Add('')
+}
 $lines.Add('## Governance')
 $lines.Add('')
 if ($dashboard.governance) {
