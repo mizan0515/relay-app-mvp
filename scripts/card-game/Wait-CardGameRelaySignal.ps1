@@ -3,6 +3,7 @@ param(
   [int]$TimeoutSeconds = 1800,
   [int]$PollSeconds = 10,
   [int]$StaleActiveSeconds = 30,
+  [int]$WatchdogExpiryGraceSeconds = 30,
   [string[]]$TerminalStatuses = @('Paused', 'Completed', 'Failed', 'Error', 'Stopped', 'Stale')
 )
 
@@ -27,8 +28,13 @@ while ((Get-Date) -lt $deadline) {
   }
 
   if (([string]$signal.derived_status -eq 'StaleActive' -and [int]$signal.last_progress_age_seconds -ge $StaleActiveSeconds) -or
+      [string]$signal.derived_status -eq 'HungWatchdog' -or
       [string]$signal.status -eq 'Stale') {
-    Write-Host "[RELAY_DONE] true status=stale reason=relay_process_missing"
+    if ([string]$signal.derived_status -eq 'HungWatchdog') {
+      Write-Host "[RELAY_DONE] true status=hung reason=watchdog_expired"
+    } else {
+      Write-Host "[RELAY_DONE] true status=stale reason=relay_process_missing"
+    }
     exit 1
   }
 

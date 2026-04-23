@@ -1,6 +1,7 @@
 param(
   [string]$CardGameRoot = 'D:\Unity\card game',
-  [string]$OutputPath = ''
+  [string]$OutputPath = '',
+  [int]$WatchdogExpiryGraceSeconds = 30
 )
 
 $ErrorActionPreference = 'Stop'
@@ -101,6 +102,15 @@ if (-not $relayProcessRunning -and $derivedStatus -eq 'Active' -and $lastProgres
   $derivedStatus = 'StaleActive'
 }
 
+$watchdogRemainingSeconds = 0
+if ($signal.PSObject.Properties.Name -contains 'watchdog_remaining_seconds' -and $null -ne $signal.watchdog_remaining_seconds) {
+  $watchdogRemainingSeconds = [int]$signal.watchdog_remaining_seconds
+}
+
+if ($derivedStatus -eq 'Active' -and $relayProcessRunning -and $watchdogRemainingSeconds -le (-1 * $WatchdogExpiryGraceSeconds)) {
+  $derivedStatus = 'HungWatchdog'
+}
+
 $summary = [ordered]@{
   signal_path = $resolvedPath
   session_id = [string]$signal.session_id
@@ -112,7 +122,8 @@ $summary = [ordered]@{
   current_turn = [int]$signal.current_turn
   last_progress_at = [string]$signal.last_progress_at
   last_progress_age_seconds = $lastProgressAgeSeconds
-  watchdog_remaining_seconds = $signal.watchdog_remaining_seconds
+  watchdog_remaining_seconds = $watchdogRemainingSeconds
+  watchdog_expiry_grace_seconds = $WatchdogExpiryGraceSeconds
   pending_approval_count = [int]$signal.pending_approval_count
   pending_approval = [string]$signal.pending_approval
   last_error = [string]$signal.last_error

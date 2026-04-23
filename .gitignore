@@ -23,6 +23,8 @@ examples/
 .autopilot/BRAINSTORM.md
 .autopilot/METRICS.jsonl
 .autopilot/qa-evidence/
+profiles/card-game/generated-*.json
+profiles/card-game/generated-*.md
 
 # Claude Code local state
 .claude/

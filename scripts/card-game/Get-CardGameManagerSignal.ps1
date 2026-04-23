@@ -49,8 +49,25 @@ $suggestedDesktopAction = 'prepare_autopilot'
 $waitShouldEnd = $true
 $success = $false
 $attentionRequired = $false
+$loopSessionId = if ($loopStatus) { [string]$loopStatus.session_id } else { '' }
+$relaySessionId = if ($relaySignal) { [string]$relaySignal.session_id } else { '' }
+$relayLoopMismatch = $relaySignal -and $loopStatus -and $relaySessionId -and $loopSessionId -and ($relaySessionId -ne $loopSessionId)
 
-if ($relaySignal -and [string]$relaySignal.status -eq 'Active' -and $relaySignal.relay_process_running) {
+if ($relaySignal -and [string]$relaySignal.derived_status -eq 'HungWatchdog') {
+  $overallStatus = 'relay_hung'
+  $reason = 'relay_watchdog_expired'
+  $suggestedDesktopAction = 'prepare_fresh_session'
+  $waitShouldEnd = $true
+  $attentionRequired = $true
+}
+elseif ($relayLoopMismatch) {
+  $overallStatus = 'relay_session_mismatch'
+  $reason = 'active_signal_session_differs_from_prepared_session'
+  $suggestedDesktopAction = 'prepare_fresh_session'
+  $waitShouldEnd = $true
+  $attentionRequired = $true
+}
+elseif ($relaySignal -and [string]$relaySignal.status -eq 'Active' -and $relaySignal.relay_process_running) {
   $overallStatus = 'relay_active'
   $reason = 'relay_running'
   $suggestedDesktopAction = 'wait_for_signal'
@@ -119,6 +136,9 @@ $summary = [ordered]@{
   session_id = $sessionId
   relay_status = $relayStatus
   relay_process_running = if ($relaySignal) { [bool]$relaySignal.relay_process_running } else { $false }
+  relay_session_mismatch = [bool]$relayLoopMismatch
+  relay_loop_session_id = $loopSessionId
+  relay_signal_session_id = $relaySessionId
   suggested_desktop_action = $suggestedDesktopAction
   wait_should_end = $waitShouldEnd
   success = $success
