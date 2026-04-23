@@ -221,7 +221,7 @@
                         <TextBlock Margin="0,6,0,0"
                                    Text="1. Click Easy Start." />
                         <TextBlock Margin="0,2,0,0"
-                                   Text="2. Wait until the app says attention is needed." />
+                                   Text="2. The app repairs a dead relay and runs one safe session." />
                         <TextBlock Margin="0,2,0,0"
                                    Text="3. Read only Easy Status. Ignore full logs." />
                         <Button x:Name="EasyStartButton"

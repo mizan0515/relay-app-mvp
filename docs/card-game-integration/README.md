@@ -135,7 +135,7 @@ UI instead of manual PowerShell.
 1. Launch `CodexClaudeRelay.Desktop`.
 2. In the `Easy Operator` box, keep the default card-game root and task slug unless you were told to change them.
 3. Click `Easy Start`.
-4. Wait until the app says attention is needed.
+4. The app repairs a dead relay automatically and runs one safe DAD session.
 5. Read only `Easy Status` and the compact markers in the status mirror:
    `D:\Unity\card game\.autopilot\generated\relay-live-signal.txt`
 6. If the relay dies, read:
@@ -174,7 +174,9 @@ What `Managed Run Until Attention` adds:
 What `Easy Start` adds:
 - gives a non-developer operator one obvious button instead of multiple relay-control buttons
 - points the operator to `Easy Status` instead of the raw relay or event log views
-- uses the same compact-signal controller path as `Managed Run Until Attention`
+- forces relay mode for the easy path so the operator gets one bounded DAD session instead of a route-only result
+- repairs a stale relay automatically before starting the next bounded session
+- stops again after one safe session so the operator never gets trapped in an invisible long loop
 
 What `Managed Autopilot Loop` adds:
 - repeats `prepare -> bounded relay -> completion write-back` for the requested number of sessions

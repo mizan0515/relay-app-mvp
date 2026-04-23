@@ -131,9 +131,12 @@ Click-Button (Find-ByAutomationId $win 'EasyStartButton')
 $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
 $lastMarker = ''
 while ((Get-Date) -lt $deadline) {
-    Start-Sleep -Seconds 5
+    Start-Sleep -Seconds 3
     $signal = Read-ManagerSignal
     if ($null -eq $signal) {
+        if ((Find-ByAutomationId $win 'EasyStartButton').Current.IsEnabled) {
+            break
+        }
         continue
     }
 
@@ -143,8 +146,8 @@ while ((Get-Date) -lt $deadline) {
         $lastMarker = $marker
     }
 
-    if ($signal.attention_required -or $signal.wait_should_end) {
-        Write-Host "  [poll] stop signal detected"
+    if ((Find-ByAutomationId $win 'EasyStartButton').Current.IsEnabled) {
+        Write-Host "  [poll] easy start finished"
         break
     }
 }
@@ -159,5 +162,9 @@ Write-Host ""
 Write-Host "=== ManagedStatus ==="
 $managedStatus = Wait-TextChange $win 'ManagedStatusTextBox' $initialManagedStatus 20
 $managedStatus | Write-Host
+Write-Host ""
+Write-Host "=== StatusMessage ==="
+$statusMessage = Get-Text (Find-ByAutomationId $win 'StatusMessageTextBlock')
+$statusMessage | Write-Host
 
 Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue

@@ -239,7 +239,10 @@ public partial class MainWindow : Window
                 : ManagedCardGameRootTextBox.Text.Trim();
             var turns = ParseManagedTurns();
 
-            var autopilotPreparation = await PrepareManagedAutopilotSessionAsync(managedCardGameRoot, CancellationToken.None);
+            var autopilotPreparation = await PrepareManagedAutopilotSessionAsync(
+                managedCardGameRoot,
+                forceRelay: false,
+                CancellationToken.None);
             await RefreshManagedStatusAsync(CancellationToken.None);
 
             if (!autopilotPreparation.ShouldStartRelay)
@@ -289,6 +292,7 @@ public partial class MainWindow : Window
             var result = await ExecuteManagedControllerCycleAsync(
                 managedCardGameRoot,
                 turns,
+                forceRelay: false,
                 CancellationToken.None);
             StatusMessageTextBlock.Text = result.Message;
             await RefreshManagedStatusAsync(CancellationToken.None);
@@ -309,6 +313,7 @@ public partial class MainWindow : Window
                 var result = await ExecuteManagedControllerCycleAsync(
                     managedCardGameRoot,
                     turns,
+                    forceRelay: false,
                     CancellationToken.None);
                 await RefreshManagedStatusAsync(CancellationToken.None);
 
@@ -338,6 +343,7 @@ public partial class MainWindow : Window
                 ? @"D:\Unity\card game"
                 : ManagedCardGameRootTextBox.Text.Trim();
             var turns = ParseManagedTurns();
+            var completedRelaySession = false;
 
             await RefreshManagedStatusAsync(CancellationToken.None);
 
@@ -346,8 +352,10 @@ public partial class MainWindow : Window
                 var result = await ExecuteManagedControllerCycleAsync(
                     managedCardGameRoot,
                     turns,
+                    forceRelay: true,
                     CancellationToken.None);
                 await RefreshManagedStatusAsync(CancellationToken.None);
+                completedRelaySession |= result.CompletedRelaySession;
 
                 var managerSignal = await LoadManagerSignalAsync(managedCardGameRoot, CancellationToken.None);
                 if (managerSignal is null)
@@ -356,9 +364,21 @@ public partial class MainWindow : Window
                     return;
                 }
 
-                if (!result.ShouldContinue || managerSignal.AttentionRequired || managerSignal.WaitShouldEnd)
+                if (!result.ShouldContinue)
                 {
                     StatusMessageTextBlock.Text = $"Easy Start stopped after step {stepIndex}: {result.Message}";
+                    return;
+                }
+
+                if (completedRelaySession)
+                {
+                    StatusMessageTextBlock.Text = $"Easy Start finished one safe session after step {stepIndex}: {result.Message}";
+                    return;
+                }
+
+                if (RequiresHumanAttention(managerSignal))
+                {
+                    StatusMessageTextBlock.Text = $"Easy Start stopped after step {stepIndex}: {BuildEasyStopReason(managerSignal)}";
                     return;
                 }
             }
@@ -382,6 +402,7 @@ public partial class MainWindow : Window
                 var result = await ExecuteManagedControllerCycleAsync(
                     managedCardGameRoot,
                     turns,
+                    forceRelay: false,
                     CancellationToken.None);
                 await RefreshManagedStatusAsync(CancellationToken.None);
 
@@ -2653,6 +2674,7 @@ public partial class MainWindow : Window
 
     private async Task<ManagedAutopilotPreparation> PrepareManagedAutopilotSessionAsync(
         string cardGameRoot,
+        bool forceRelay,
         CancellationToken cancellationToken)
     {
         var repoRoot = TryFindRelayRepositoryRoot()
@@ -2675,6 +2697,10 @@ public partial class MainWindow : Window
             "-MaxSessions",
             "1"
         });
+        if (forceRelay)
+        {
+            arguments += " -ForceRelay";
+        }
 
         var preparationResult = await RunPowerShellProcessAsync(arguments, cancellationToken);
         if (preparationResult.ExitCode != 0)
@@ -2698,6 +2724,7 @@ public partial class MainWindow : Window
     private async Task<ManagedControllerResult> ExecuteManagedControllerCycleAsync(
         string cardGameRoot,
         int turns,
+        bool forceRelay,
         CancellationToken cancellationToken)
     {
         for (var guard = 0; guard < 6; guard++)
@@ -2712,53 +2739,16 @@ public partial class MainWindow : Window
             {
                 case "prepare_autopilot":
                 case "prepare_fresh_session":
-                    await PrepareManagedAutopilotSessionAsync(cardGameRoot, cancellationToken);
+                    await PrepareManagedAutopilotSessionAsync(cardGameRoot, forceRelay, cancellationToken);
                     await RefreshManagedStatusAsync(cancellationToken);
+                    if (forceRelay)
+                    {
+                        return await RunPreparedManagedSessionAsync(cardGameRoot, turns, cancellationToken);
+                    }
                     continue;
 
                 case "run_relay_session":
-                {
-                    var prepared = await LoadPreparedManagedSessionAsync(cancellationToken);
-                    WorkingDirectoryTextBox.Text = cardGameRoot;
-                    SessionIdTextBox.Text = prepared.SessionId;
-                    InitialPromptTextBox.Text = prepared.Prompt;
-                    _currentAdmissionManifestPath = prepared.ManifestPath;
-                    SaveUiSettings();
-
-                    await EnsureBrokerAsync(cancellationToken, recreate: true);
-                    await EnsureAdaptersReadyForSessionAsync();
-
-                    await _broker!.StartSessionAsync(
-                        prepared.SessionId,
-                        AgentRole.Codex,
-                        prepared.Prompt,
-                        TryLoadSessionBootstrap(),
-                        cancellationToken);
-
-                    await RunTurnBatchCoreAsync(
-                        turns,
-                        successPauseReason: turns == 2
-                            ? "Paused intentionally after one successful relay cycle."
-                            : $"Paused intentionally after {turns} managed relay turns.",
-                        successStatusMessage: turns == 2
-                            ? "Managed controller completed one cycle and paused intentionally."
-                            : $"Managed controller completed {turns} turns and paused intentionally.");
-
-                    var completionResult = await CompleteManagedRelaySessionAsync(
-                        cardGameRoot,
-                        prepared.ManifestPath,
-                        cancellationToken);
-                    if (completionResult.ExitCode != 0)
-                    {
-                        var message = string.IsNullOrWhiteSpace(completionResult.ErrorText)
-                            ? "managed completion failed"
-                            : completionResult.ErrorText;
-                        return new ManagedControllerResult(false, message);
-                    }
-
-                    await RefreshManagedStatusAsync(cancellationToken);
-                    return new ManagedControllerResult(true, $"Managed controller executed session {prepared.SessionId}.");
-                }
+                    return await RunPreparedManagedSessionAsync(cardGameRoot, turns, cancellationToken);
 
                 case "complete_terminal_session":
                 {
@@ -2796,6 +2786,53 @@ public partial class MainWindow : Window
         }
 
         return new ManagedControllerResult(false, "Managed controller reached its internal guard limit. Refresh the manager signal and retry.");
+    }
+
+    private async Task<ManagedControllerResult> RunPreparedManagedSessionAsync(
+        string cardGameRoot,
+        int turns,
+        CancellationToken cancellationToken)
+    {
+        var prepared = await LoadPreparedManagedSessionAsync(cancellationToken);
+        WorkingDirectoryTextBox.Text = cardGameRoot;
+        SessionIdTextBox.Text = prepared.SessionId;
+        InitialPromptTextBox.Text = prepared.Prompt;
+        _currentAdmissionManifestPath = prepared.ManifestPath;
+        SaveUiSettings();
+
+        await EnsureBrokerAsync(cancellationToken, recreate: true);
+        await EnsureAdaptersReadyForSessionAsync();
+
+        await _broker!.StartSessionAsync(
+            prepared.SessionId,
+            AgentRole.Codex,
+            prepared.Prompt,
+            TryLoadSessionBootstrap(),
+            cancellationToken);
+
+        await RunTurnBatchCoreAsync(
+            turns,
+            successPauseReason: turns == 2
+                ? "Paused intentionally after one successful relay cycle."
+                : $"Paused intentionally after {turns} managed relay turns.",
+            successStatusMessage: turns == 2
+                ? "Managed controller completed one cycle and paused intentionally."
+                : $"Managed controller completed {turns} turns and paused intentionally.");
+
+        var completionResult = await CompleteManagedRelaySessionAsync(
+            cardGameRoot,
+            prepared.ManifestPath,
+            cancellationToken);
+        if (completionResult.ExitCode != 0)
+        {
+            var message = string.IsNullOrWhiteSpace(completionResult.ErrorText)
+                ? "managed completion failed"
+                : completionResult.ErrorText;
+            return new ManagedControllerResult(false, message);
+        }
+
+        await RefreshManagedStatusAsync(cancellationToken);
+        return new ManagedControllerResult(true, $"Managed controller executed session {prepared.SessionId}.", CompletedRelaySession: true);
     }
 
     private async Task<ManagedCardGamePreparation> LoadPreparedManagedSessionAsync(CancellationToken cancellationToken)
@@ -2883,6 +2920,17 @@ public partial class MainWindow : Window
         "wait_for_operator" => "Stop and wait for a human decision.",
         "fix_blocker" => "Stop and fix the blocker before continuing.",
         _ => "Wait for the next compact status update."
+    };
+
+    private static bool RequiresHumanAttention(ManagerSignalSummary managerSignal) =>
+        managerSignal.SuggestedDesktopAction is "wait_for_operator" or "fix_blocker" or "consume_route_artifact";
+
+    private static string BuildEasyStopReason(ManagerSignalSummary managerSignal) => managerSignal.SuggestedDesktopAction switch
+    {
+        "wait_for_operator" => "The app is halted on purpose. A human decision is required.",
+        "fix_blocker" => "The backlog or decision state is blocked. A human must fix the blocker.",
+        "consume_route_artifact" => "This slice was routed away from DAD. A human should read the route artifact instead.",
+        _ => "A human decision is required before Easy Start can continue."
     };
 
     private async Task<ManagerSignalSummary?> LoadManagerSignalAsync(string cardGameRoot, CancellationToken cancellationToken)
@@ -3195,7 +3243,7 @@ public partial class MainWindow : Window
 
     private sealed record ManagedAutopilotPreparation(bool ShouldStartRelay, string StatusMessage);
 
-    private sealed record ManagedControllerResult(bool ShouldContinue, string Message);
+    private sealed record ManagedControllerResult(bool ShouldContinue, string Message, bool CompletedRelaySession = false);
 
     private sealed record ManagerSignalSummary
     {
