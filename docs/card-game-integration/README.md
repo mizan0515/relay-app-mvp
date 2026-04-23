@@ -22,6 +22,12 @@ call when a task needs Codex <-> Claude peer turns.
   - stable session prefix meant to maximize cache reuse
 - `profiles/card-game/skill-contracts.json`
   - bucket-to-skill contract map for required skills, required evidence, and forbidden tools
+- `profiles/card-game/agent-identities.json`
+  - per-agent identity registry for autopilot, route, relay-peer, and Unity-MCP roles
+- `profiles/card-game/tool-registry.json`
+  - centrally approved tool registry for compact artifacts, relay runtimes, script runners, and Unity MCP
+- `profiles/card-game/policy-registry.json`
+  - centrally approved policy registry for compact-artifact discipline, forbidden-tool rules, and required evidence contracts
 - `scripts/card-game/Install-CardGameProfile.ps1`
   - installs the card-game profile into `%LocalAppData%\CodexClaudeRelayMvp`
 - `scripts/card-game/New-CardGameSessionPrompt.ps1`
@@ -60,6 +66,8 @@ call when a task needs Codex <-> Claude peer turns.
   - reads the compact relay live-signal artifact without opening the full JSONL log
 - `scripts/card-game/Get-CardGameManagerSignal.ps1`
   - merges relay liveness plus loop status into one compact manager signal so Desktop/autopilot can see death, wait-stop, and next action without reading multiple artifacts
+- `scripts/card-game/Get-CardGameAgentIdentityStatus.ps1`
+  - resolves which registered agent identities are active for the current slice and blocks governance if the identity mapping is broken
 - `scripts/card-game/Get-CardGameRelayEvidence.ps1`
   - reads one compact relay session evidence summary so operators can confirm whether MCP activity was observed without opening the full JSONL log
 - `scripts/card-game/Get-CardGameRequiredEvidenceStatus.ps1`
@@ -86,13 +94,15 @@ call when a task needs Codex <-> Claude peer turns.
    - required skills
    - required evidence
    - forbidden tools
-5. Run the relay against `D:\Unity\card game` as the working directory.
-6. Require compile/test/QA evidence before writing progress back to
+5. Carry explicit agent identities in the admission/guidance path so every manager, route, relay-peer, and Unity-MCP role is traceable and revocable.
+6. Run the relay against `D:\Unity\card game` as the working directory.
+7. Require compile/test/QA evidence before writing progress back to
    `.autopilot` or `Document/dialogue/`.
-7. Treat missing required evidence as a hard stop for terminal-session
+8. Treat missing required evidence as a hard stop for terminal-session
    completion instead of a soft warning.
-8. Treat detectable forbidden-tool violations such as `web` on Unity-local slices as a hard stop for terminal-session completion.
-9. After the relay closes in a terminal state, run the completion step to
+9. Treat detectable forbidden-tool violations such as `web` on Unity-local slices as a hard stop for terminal-session completion.
+10. Treat missing or unregistered agent identities as a hard governance stop before trusting the slice.
+11. After the relay closes in a terminal state, run the completion step to
    update heuristics plus `.autopilot/STATE.md`, `HISTORY.md`, and
    `METRICS.jsonl`.
 10. Treat backlog corruption warnings as a scope freeze until the live
@@ -147,6 +157,9 @@ The text signal always starts with these sentinel lines:
 
 When governance blocks a slice, manager text also includes:
 - `[GOVERNANCE] status=... reason=... attention=...`
+- `[AGENT_IDENTITY] status=...`
+- `[TOOL_REGISTRY] status=...`
+- `[POLICY_REGISTRY] status=...`
 - `[RETRY_BUDGET] exhausted unity_verification` or `[RETRY_BUDGET] left=... limit=...` when retry budgeting is active
 
 These are the only lines an LLM or operator needs to read for routine status checks.
