@@ -142,4 +142,23 @@ for name in "${BLOCKS[@]}"; do
   fi
 done
 
+# ---------------------------------------------------------------------------
+# Soft tripwire: warn when HISTORY.md / dashboard pass rotation thresholds.
+# Rule shipped in PROMPT.md was advisory only; downstream HISTORY reached
+# 50KB+ without triggering anything. This prints a warn line so the agent
+# rotates into the documented -ARCHIVE.md sibling on the next iter.
+# ---------------------------------------------------------------------------
+warn_size() {
+  local path="$1" entry_cap="$2" byte_cap="$3"
+  [ -f "$path" ] || return 0
+  local bytes entries
+  bytes=$(wc -c < "$path" | tr -d '[:space:]')
+  entries=$(grep -cE '^#{2,3}[[:space:]]' "$path" 2>/dev/null || echo 0)
+  if [ "$entries" -gt "$entry_cap" ] || [ "$bytes" -gt "$byte_cap" ]; then
+    echo "protect.sh: WARN $path entries=$entries bytes=$bytes (caps=$entry_cap/$byte_cap). Rotate into ${path%.md}-ARCHIVE.md on next iter."
+  fi
+}
+warn_size .autopilot/HISTORY.md 50 20480
+warn_size .autopilot/대시보드.md 100 40960
+
 exit 0
