@@ -56,6 +56,8 @@ call when a task needs Codex <-> Claude peer turns.
   - reads the compact relay live-signal artifact without opening the full JSONL log
 - `scripts/card-game/Get-CardGameManagerSignal.ps1`
   - merges relay liveness plus loop status into one compact manager signal so Desktop/autopilot can see death, wait-stop, and next action without reading multiple artifacts
+- `scripts/card-game/Get-CardGameRelayEvidence.ps1`
+  - reads one compact relay session evidence summary so operators can confirm whether MCP activity was observed without opening the full JSONL log
 - `scripts/card-game/Watch-RelaySignalLiveness.ps1`
   - detached watcher that rewrites live signals to `Stale` if the Desktop relay process disappears unexpectedly, then refreshes the manager signal artifact
 - `scripts/card-game/Wait-CardGameRelaySignal.ps1`
@@ -110,9 +112,11 @@ work together without reading large logs.
    `powershell -ExecutionPolicy Bypass -File scripts/card-game/Get-CardGameManagerSignal.ps1`
 4. Wait for a bounded completion signal instead of tailing logs forever:
    `powershell -ExecutionPolicy Bypass -File scripts/card-game/Wait-CardGameRelaySignal.ps1 -TimeoutSeconds 1800`
-5. Full autopilot-driven preparation/execution path:
+5. Read compact MCP evidence for the latest relay session:
+   `powershell -ExecutionPolicy Bypass -File scripts/card-game/Get-CardGameRelayEvidence.ps1`
+6. Full autopilot-driven preparation/execution path:
    `powershell -ExecutionPolicy Bypass -File scripts/card-game/Invoke-CardGameAutopilotLoop.ps1 -ForceRelay`
-6. When the relay reaches a terminal session, integrate it back into the card-game autopilot:
+7. When the relay reaches a terminal session, integrate it back into the card-game autopilot:
    `powershell -ExecutionPolicy Bypass -File scripts/card-game/Complete-CardGameRelaySession.ps1`
 
 Relay live signal artifacts are mirrored into:

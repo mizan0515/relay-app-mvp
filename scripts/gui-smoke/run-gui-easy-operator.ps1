@@ -198,6 +198,11 @@ $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
 $lastMarker = ''
 $injectedDeath = $false
 while ((Get-Date) -lt $deadline) {
+    if ($proc.HasExited) {
+        Write-Host "  [poll] desktop process exited early"
+        break
+    }
+
     Start-Sleep -Seconds 3
     $signal = Read-ManagerSignal
     if ($null -eq $signal) {
@@ -228,6 +233,15 @@ while ((Get-Date) -lt $deadline) {
     if ((Find-ByAutomationId $win 'EasyStartButton').Current.IsEnabled) {
         Write-Host "  [poll] easy start finished"
         break
+    }
+}
+
+if ((Get-Date) -ge $deadline) {
+    $signal = Read-ManagerSignal
+    if ($null -ne $signal) {
+        Write-Host "  [poll] timeout while manager status was $($signal.overall_status) / $($signal.suggested_desktop_action)"
+    } else {
+        Write-Host "  [poll] timeout while manager status was unavailable"
     }
 }
 

@@ -285,6 +285,27 @@ if (Test-Path -LiteralPath $relayEvidenceScriptPath) {
   }
 }
 
+$relayMcpCalls = 0
+$relayUnityMcpCalls = 0
+$relayEventLogPath = ''
+if ($relayEvidence) {
+  if ($relayEvidence.PSObject.Properties.Name -contains 'mcp_calls_observed') {
+    $relayMcpCalls = [int]$relayEvidence.mcp_calls_observed
+  } elseif ($relayEvidence.PSObject.Properties.Name -contains 'tool_events_observed') {
+    $relayMcpCalls = [int]$relayEvidence.tool_events_observed
+  }
+
+  if ($relayEvidence.PSObject.Properties.Name -contains 'unity_mcp_calls_observed') {
+    $relayUnityMcpCalls = [int]$relayEvidence.unity_mcp_calls_observed
+  } elseif ($relayEvidence.PSObject.Properties.Name -contains 'unity_mcp_calls') {
+    $relayUnityMcpCalls = [int]$relayEvidence.unity_mcp_calls
+  }
+
+  if ($relayEvidence.PSObject.Properties.Name -contains 'event_log_path') {
+    $relayEventLogPath = [string]$relayEvidence.event_log_path
+  }
+}
+
 $metrics = [ordered]@{
   iter = $nextIteration
   ts = (Get-Date).ToString('o')
@@ -293,8 +314,8 @@ $metrics = [ordered]@{
   duration_s = 0
   files_read = 0
   bash_calls = 0
-  mcp_calls = if ($relayEvidence) { [int]$relayEvidence.tool_events_observed } else { 0 }
-  unity_mcp_calls = if ($relayEvidence) { [int]$relayEvidence.unity_mcp_calls_observed } else { 0 }
+  mcp_calls = $relayMcpCalls
+  unity_mcp_calls = $relayUnityMcpCalls
   commits = 0
   prs = 0
   merged = 0
@@ -311,6 +332,8 @@ $metrics = [ordered]@{
   relay_cache_read_tokens = if ($learning) { $learning.total_cache_read_input_tokens } else { 0 }
   relay_cost_claude_usd = if ($learning) { $learning.total_cost_claude_usd } else { 0 }
   relay_cost_codex_usd = if ($learning) { $learning.total_cost_codex_usd } else { 0 }
+  relay_unity_mcp_calls = $relayUnityMcpCalls
+  relay_event_log_path = $relayEventLogPath
 }
 
 if ($WhatIf) {
