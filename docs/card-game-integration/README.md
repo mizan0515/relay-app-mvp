@@ -138,10 +138,11 @@ UI instead of manual PowerShell.
 3. Click `Managed CardGame Run`.
 4. For backlog/decision-driven execution from the same UI, click `Managed Autopilot Run`.
 5. To let Desktop execute only the single next manager-recommended action, click `Managed Next Step`.
-6. To keep preparing/running/completing several bounded slices from the same window, click `Managed Autopilot Loop`.
-7. Read only the compact markers in the status mirror:
+6. For the default operator path, click `Managed Run Until Attention`.
+7. To keep preparing/running/completing several bounded slices from the same window with an explicit loop count, click `Managed Autopilot Loop`.
+8. Read only the compact markers in the status mirror:
    `D:\Unity\card game\.autopilot\generated\relay-live-signal.txt`
-8. If the relay dies, read:
+9. If the relay dies, read:
    `D:\Unity\card game\.autopilot\generated\relay-manager-signal.txt`
 
 What this button does:
@@ -161,6 +162,11 @@ What `Managed Next Step` adds:
 - reads `suggested_desktop_action` from the compact manager signal and executes only that one action
 - lets Desktop handle `prepare`, `run`, or `complete` without the operator deciding which script should run
 - stops immediately on `route_only`, `blocked`, `halted`, or `wait_for_signal`
+
+What `Managed Run Until Attention` adds:
+- repeats manager-directed steps until the compact manager signal says attention is required or waiting should end
+- gives the administrator one default Codex Desktop path instead of choosing between prepare/run/complete scripts
+- keeps the stop rule compact and token-cheap because Desktop still reads only the manager signal, not the full relay log
 
 What `Managed Autopilot Loop` adds:
 - repeats `prepare -> bounded relay -> completion write-back` for the requested number of sessions

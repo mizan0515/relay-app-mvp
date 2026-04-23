@@ -295,6 +295,41 @@ public partial class MainWindow : Window
         });
     }
 
+    private async void RunManagedUntilAttentionButton_Click(object sender, RoutedEventArgs e)
+    {
+        await RunOperationAsync("Running the managed desktop controller until attention is required...", async () =>
+        {
+            var managedCardGameRoot = string.IsNullOrWhiteSpace(ManagedCardGameRootTextBox.Text)
+                ? @"D:\Unity\card game"
+                : ManagedCardGameRootTextBox.Text.Trim();
+            var turns = ParseManagedTurns();
+
+            for (var stepIndex = 1; stepIndex <= 24; stepIndex++)
+            {
+                var result = await ExecuteManagedControllerCycleAsync(
+                    managedCardGameRoot,
+                    turns,
+                    CancellationToken.None);
+                await RefreshManagedStatusAsync(CancellationToken.None);
+
+                var managerSignal = await LoadManagerSignalAsync(managedCardGameRoot, CancellationToken.None);
+                if (managerSignal is null)
+                {
+                    StatusMessageTextBlock.Text = $"Managed controller stopped after step {stepIndex}: managed status is not available.";
+                    return;
+                }
+
+                if (!result.ShouldContinue || managerSignal.AttentionRequired || managerSignal.WaitShouldEnd)
+                {
+                    StatusMessageTextBlock.Text = $"Managed controller stopped after step {stepIndex}: {result.Message}";
+                    return;
+                }
+            }
+
+            StatusMessageTextBlock.Text = "Managed controller stopped after reaching its desktop safety limit. Refresh the manager signal and continue if needed.";
+        });
+    }
+
     private async void RunManagedAutopilotLoopButton_Click(object sender, RoutedEventArgs e)
     {
         await RunOperationAsync("Running a managed autopilot desktop loop...", async () =>
@@ -988,6 +1023,7 @@ public partial class MainWindow : Window
         RunManagedCardGameButton.IsEnabled = !_isBusy;
         RunManagedAutopilotButton.IsEnabled = !_isBusy;
         RunManagedNextStepButton.IsEnabled = !_isBusy;
+        RunManagedUntilAttentionButton.IsEnabled = !_isBusy;
         RunManagedAutopilotLoopButton.IsEnabled = !_isBusy;
         RefreshManagedStatusButton.IsEnabled = !_isBusy;
         AutoRunButton.IsEnabled = !_isBusy;
