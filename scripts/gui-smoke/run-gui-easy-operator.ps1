@@ -4,7 +4,8 @@ param(
     [string]$CardGameRoot = 'D:\Unity\card game',
     [string]$TaskSlug = 'companion-depth-first-slice',
     [string]$ScreenshotDir = '',
-    [int]$TimeoutSeconds = 300
+    [int]$TimeoutSeconds = 300,
+    [switch]$InjectRelayDeathOnce
 )
 
 $ErrorActionPreference = 'Stop'
@@ -18,6 +19,7 @@ if (-not $ScreenshotDir) {
 New-Item -ItemType Directory -Force -Path $ScreenshotDir | Out-Null
 $exe = Join-Path $repoRoot 'CodexClaudeRelay.Desktop\bin\Debug\net10.0-windows\CodexClaudeRelay.Desktop.exe'
 $managerSignalPath = Join-Path $CardGameRoot '.autopilot\generated\relay-manager-signal.json'
+$liveSignalPath = Join-Path $CardGameRoot '.autopilot\generated\relay-live-signal.json'
 
 function Save-Screen([string]$tag) {
     $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
@@ -103,6 +105,70 @@ function Read-ManagerSignal() {
     }
 }
 
+function Write-InjectedRelayDeath($signal) {
+    if ($null -eq $signal) {
+        return
+    }
+
+    $sessionId = [string]$signal.session_id
+    if (-not $sessionId) {
+        return
+    }
+
+    $now = (Get-Date).ToString('o')
+    $taskSlug = if ($signal.resolved_task_slug) { [string]$signal.resolved_task_slug } else { $TaskSlug }
+    $relayMarker = "[RELAY_SIGNAL] status=stale session=$sessionId turn=2 role=claude-code progress_age=00:00 watchdog=disabled approvals=0"
+    $relayDoneMarker = "[RELAY_DONE] true status=stale reason=relay_process_missing"
+    $managerMarker = "[MANAGER_SIGNAL] overall=relay_dead next=prepare session=$sessionId task=$taskSlug action=prepare_fresh_session attention=true"
+    $managerDoneMarker = "[MANAGER_DONE] true success=false reason=relay_process_missing"
+
+    $liveSignal = [ordered]@{
+        generated_at = $now
+        session_id = $sessionId
+        status = 'Stale'
+        is_terminal = $true
+        active_role = 'claude-code'
+        current_turn = 2
+        last_progress_at = $now
+        last_progress_age_seconds = 0
+        watchdog_remaining_seconds = 0
+        pending_approval_count = 0
+        pending_approval = ''
+        last_error = 'relay_process_missing'
+        signal_marker = $relayMarker
+        done_marker = $relayDoneMarker
+        event_log_path = ''
+        source_pid = 0
+        source_process_started_at = $now
+        heartbeat_at = $now
+        heartbeat_max_age_seconds = 30
+    }
+
+    $managerSignal = [ordered]@{
+        generated_at = $now
+        card_game_root = $CardGameRoot
+        overall_status = 'relay_dead'
+        reason = 'relay_process_missing'
+        next_action = 'prepare'
+        resolved_task_slug = $taskSlug
+        session_id = $sessionId
+        relay_status = 'Stale'
+        relay_process_running = $false
+        suggested_desktop_action = 'prepare_fresh_session'
+        wait_should_end = $true
+        success = $false
+        attention_required = $true
+        relay_signal_marker = $relayMarker
+        relay_done_marker = $relayDoneMarker
+        manager_signal_marker = $managerMarker
+        manager_done_marker = $managerDoneMarker
+    }
+
+    $liveSignal | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $liveSignalPath -Encoding UTF8
+    $managerSignal | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $managerSignalPath -Encoding UTF8
+    Write-Host "  [inject] simulated relay death for session $sessionId"
+}
+
 Write-Host "=== UIA easy operator @ $(Get-Date -Format o) ==="
 Write-Host "cardGameRoot: $CardGameRoot"
 Write-Host "taskSlug:     $TaskSlug"
@@ -130,6 +196,7 @@ Click-Button (Find-ByAutomationId $win 'EasyStartButton')
 
 $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
 $lastMarker = ''
+$injectedDeath = $false
 while ((Get-Date) -lt $deadline) {
     Start-Sleep -Seconds 3
     $signal = Read-ManagerSignal
@@ -144,6 +211,18 @@ while ((Get-Date) -lt $deadline) {
     if ($marker -ne $lastMarker) {
         Write-Host "  [poll] $marker"
         $lastMarker = $marker
+    }
+
+    if ($InjectRelayDeathOnce -and -not $injectedDeath -and [string]$signal.overall_status -eq 'relay_active') {
+        Write-InjectedRelayDeath $signal
+        $injectedDeath = $true
+        continue
+    }
+
+    $statusMessage = Get-Text (Find-ByAutomationId $win 'StatusMessageTextBlock')
+    if ($InjectRelayDeathOnce -and $statusMessage -like 'Easy Start is retrying automatically*') {
+        Write-Host "  [poll] automatic retry detected"
+        break
     }
 
     if ((Find-ByAutomationId $win 'EasyStartButton').Current.IsEnabled) {
