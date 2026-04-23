@@ -176,6 +176,7 @@ What `Easy Start` adds:
 - points the operator to `Easy Status` instead of the raw relay or event log views
 - forces relay mode for the easy path so the operator gets one bounded DAD session instead of a route-only result
 - repairs a stale relay automatically before starting the next bounded session
+- if the relay dies during that safe session, retries one more fresh session automatically before asking the human to intervene
 - stops again after one safe session so the operator never gets trapped in an invisible long loop
 
 What `Managed Autopilot Loop` adds:

@@ -344,6 +344,7 @@ public partial class MainWindow : Window
                 : ManagedCardGameRootTextBox.Text.Trim();
             var turns = ParseManagedTurns();
             var completedRelaySession = false;
+            var remainingAutoRetries = 1;
 
             await RefreshManagedStatusAsync(CancellationToken.None);
 
@@ -366,6 +367,14 @@ public partial class MainWindow : Window
 
                 if (!result.ShouldContinue)
                 {
+                    if (result.RetrySuggested && remainingAutoRetries > 0)
+                    {
+                        remainingAutoRetries--;
+                        StatusMessageTextBlock.Text = $"Easy Start is retrying automatically after a relay death. Retries left: {remainingAutoRetries}.";
+                        await RefreshManagedStatusAsync(CancellationToken.None);
+                        continue;
+                    }
+
                     StatusMessageTextBlock.Text = $"Easy Start stopped after step {stepIndex}: {result.Message}";
                     return;
                 }
@@ -2832,7 +2841,7 @@ public partial class MainWindow : Window
             }
             catch (OperationCanceledException) when (!string.IsNullOrWhiteSpace(watchdogStopReason))
             {
-                return new ManagedControllerResult(false, watchdogStopReason);
+                return new ManagedControllerResult(false, watchdogStopReason, RetrySuggested: true);
             }
             finally
             {
@@ -2901,7 +2910,7 @@ public partial class MainWindow : Window
             if (string.Equals(managerSignal.SuggestedDesktopAction, "prepare_fresh_session", StringComparison.Ordinal) ||
                 string.Equals(managerSignal.OverallStatus, "relay_dead", StringComparison.Ordinal))
             {
-                setStopReason("Easy Start noticed that the relay died during the safe session. Start again to prepare a fresh session.");
+                setStopReason("Easy Start noticed that the relay died during the safe session. The desktop can retry once automatically.");
                 cancellationTokenSource.Cancel();
                 return;
             }
@@ -3316,7 +3325,11 @@ public partial class MainWindow : Window
 
     private sealed record ManagedAutopilotPreparation(bool ShouldStartRelay, string StatusMessage);
 
-    private sealed record ManagedControllerResult(bool ShouldContinue, string Message, bool CompletedRelaySession = false);
+    private sealed record ManagedControllerResult(
+        bool ShouldContinue,
+        string Message,
+        bool CompletedRelaySession = false,
+        bool RetrySuggested = false);
 
     private sealed record ManagerSignalSummary
     {
