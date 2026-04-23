@@ -134,6 +134,20 @@ elseif ($relaySignal -and [string]$relaySignal.status -eq 'Stale') {
   $nextAction = 'prepare'
   $reasons.Add("Relay live signal was normalized to stale for session $($relaySignal.session_id); prepare a fresh session instead of waiting.")
 }
+elseif ($relaySignal -and [string]$relaySignal.status -eq 'AwaitingApproval') {
+  $nextAction = 'blocked'
+  $reasons.Add("Relay session $($relaySignal.session_id) is waiting for operator approval: $($relaySignal.pending_approval)")
+}
+elseif ($relaySignal -and
+        [string]$relaySignal.status -eq 'Paused' -and
+        [string]$relaySignal.last_error -eq 'Paused intentionally after one successful relay cycle.') {
+  $nextAction = 'run'
+  $reasons.Add("Relay session $($relaySignal.session_id) completed one safe relay cycle and can resume with another bounded relay batch.")
+}
+elseif ($relaySignal -and [string]$relaySignal.status -eq 'Paused' -and -not [string]::IsNullOrWhiteSpace([string]$relaySignal.last_error)) {
+  $nextAction = 'blocked'
+  $reasons.Add("Relay session $($relaySignal.session_id) paused with error: $($relaySignal.last_error)")
+}
 elseif ($manifest -and $sessionId -and $executionMode -and $executionMode -ne 'relay-dad') {
   $nextAction = 'route'
   $reasons.Add("Session $sessionId is prepared but routed to $executionMode instead of desktop relay.")

@@ -33,6 +33,7 @@ public partial class MainWindow : Window
     private bool _isBusy;
     private RelayPendingApproval? _livePendingApproval;
     private TaskCompletionSource<RelayApprovalDecision>? _pendingApprovalDecisionSource;
+    private bool _autoResolvingQueuedApproval;
     private string? _currentAdmissionManifestPath;
     private bool _suppressUiSettingCallbacks;
     private readonly DispatcherTimer _statusRefreshTimer;
@@ -752,6 +753,32 @@ public partial class MainWindow : Window
         EventLogTextBox.Text = BuildEventLogTailSummary(logPath);
         ApplyVisualStates();
         WriteAutomaticLogArtifacts();
+        TryAutoResolveQueuedApproval();
+    }
+
+    private void TryAutoResolveQueuedApproval()
+    {
+        if (_autoResolvingQueuedApproval ||
+            !IsAutoApproveAllRequestsEnabled() ||
+            _pendingApprovalDecisionSource is not null ||
+            _broker?.State.PendingApproval is null)
+        {
+            return;
+        }
+
+        _autoResolvingQueuedApproval = true;
+        _ = RunOperationAsync("Auto-approving queued approval...", async () =>
+        {
+            try
+            {
+                await _broker.ResolveCurrentPendingApprovalAsync(RelayApprovalDecision.ApproveForSession, CancellationToken.None);
+                StatusMessageTextBlock.Text = "Auto-approved queued approval because dangerous auto-approve mode is enabled.";
+            }
+            finally
+            {
+                _autoResolvingQueuedApproval = false;
+            }
+        });
     }
 
     private async Task EnsureAdaptersReadyForSessionAsync()
@@ -2883,6 +2910,18 @@ public partial class MainWindow : Window
                 cancellationToken);
         }
 
+        await RefreshManagedStatusAsync(cancellationToken);
+        var managerSignal = await LoadManagerSignalAsync(cardGameRoot, cancellationToken);
+        if (managerSignal is null)
+        {
+            return new ManagedControllerResult(false, $"Managed relay session {prepared.SessionId} finished, but the compact manager status is missing.");
+        }
+
+        if (!string.Equals(managerSignal.SuggestedDesktopAction, "complete_terminal_session", StringComparison.Ordinal))
+        {
+            return new ManagedControllerResult(false, BuildManagedPostRunMessage(managerSignal));
+        }
+
         var completionResult = await CompleteManagedRelaySessionAsync(
             cardGameRoot,
             prepared.ManifestPath,
@@ -3028,6 +3067,15 @@ public partial class MainWindow : Window
         "fix_blocker" => "The backlog or decision state is blocked. A human must fix the blocker.",
         "consume_route_artifact" => "This slice was routed away from DAD. A human should read the route artifact instead.",
         _ => "A human decision is required before Easy Start can continue."
+    };
+
+    private static string BuildManagedPostRunMessage(ManagerSignalSummary managerSignal) => managerSignal.SuggestedDesktopAction switch
+    {
+        "run_relay_session" => $"Relay session stayed prepared instead of reaching a terminal state. Manager status: {managerSignal.OverallStatus} / {managerSignal.Reason}.",
+        "fix_blocker" => $"Relay session paused with a blocker. Manager status: {managerSignal.OverallStatus} / {managerSignal.Reason}.",
+        "prepare_fresh_session" => $"Relay session died during execution. Manager status: {managerSignal.OverallStatus} / {managerSignal.Reason}.",
+        "wait_for_signal" => $"Relay session is still active. Manager status: {managerSignal.OverallStatus} / {managerSignal.Reason}.",
+        _ => $"Relay session ended in non-terminal manager state: {managerSignal.OverallStatus} / {managerSignal.Reason}."
     };
 
     private async Task<ManagerSignalSummary?> LoadManagerSignalAsync(string cardGameRoot, CancellationToken cancellationToken)

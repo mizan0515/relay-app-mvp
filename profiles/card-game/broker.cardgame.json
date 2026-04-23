@@ -1,5 +1,5 @@
 {
-  "maxCumulativeOutputTokens": 16000,
+  "maxCumulativeOutputTokens": 32000,
   "cacheReadRatioFloor": 0.25,
   "consecutiveLowCacheTurnsThreshold": 2,
   "maxTurnsPerSession": 12,

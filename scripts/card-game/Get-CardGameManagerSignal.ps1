@@ -80,6 +80,31 @@ elseif ($relaySignal -and [string]$relaySignal.status -eq 'Stale') {
   $waitShouldEnd = $true
   $attentionRequired = $true
 }
+elseif ($relaySignal -and [string]$relaySignal.status -eq 'AwaitingApproval') {
+  $overallStatus = 'approval_required'
+  $reason = 'relay_waiting_for_approval'
+  $suggestedDesktopAction = 'review_pending_approval'
+  $waitShouldEnd = $true
+  $attentionRequired = $true
+}
+elseif ($relaySignal -and
+        [string]$relaySignal.status -eq 'Paused' -and
+        [string]$relaySignal.last_error -eq 'Paused intentionally after one successful relay cycle.') {
+  $overallStatus = 'relay_cycle_complete'
+  $reason = 'one_successful_cycle_completed'
+  $suggestedDesktopAction = 'wait_for_operator'
+  $waitShouldEnd = $true
+  $success = $true
+}
+elseif ($relaySignal -and
+        [string]$relaySignal.status -eq 'Paused' -and
+        -not [string]::IsNullOrWhiteSpace([string]$relaySignal.last_error)) {
+  $overallStatus = 'relay_paused_error'
+  $reason = 'relay_paused_with_error'
+  $suggestedDesktopAction = 'fix_blocker'
+  $waitShouldEnd = $true
+  $attentionRequired = $true
+}
 elseif ($loopStatus) {
   switch ([string]$loopStatus.next_action) {
     'run' {
@@ -120,7 +145,15 @@ elseif ($loopStatus) {
 
 $sessionId = if ($relaySignal -and $relaySignal.session_id) { [string]$relaySignal.session_id } elseif ($loopStatus) { [string]$loopStatus.session_id } else { '' }
 $taskSlug = if ($loopStatus) { [string]$loopStatus.resolved_task_slug } else { '' }
-$nextAction = if ($loopStatus) { [string]$loopStatus.next_action } else { '' }
+$nextAction = switch ($overallStatus) {
+  'approval_required' { 'blocked' }
+  'relay_paused_error' { 'blocked' }
+  'relay_session_mismatch' { 'blocked' }
+  'relay_hung' { 'blocked' }
+  'relay_dead' { 'prepare' }
+  'relay_cycle_complete' { 'run' }
+  default { if ($loopStatus) { [string]$loopStatus.next_action } else { '' } }
+}
 $relayStatus = if ($relaySignal) { [string]$relaySignal.status } else { 'none' }
 $relayMarker = if ($relaySignal) { [string]$relaySignal.signal_marker } else { '[RELAY_SIGNAL] status=missing session=(none) turn=0 role=(none) progress_age=unknown watchdog=unknown approvals=0' }
 $managerSignalMarker = "[MANAGER_SIGNAL] overall=$overallStatus next=$nextAction session=$(if ($sessionId) { $sessionId } else { '(none)' }) task=$(if ($taskSlug) { $taskSlug } else { '(none)' }) action=$suggestedDesktopAction attention=$($attentionRequired.ToString().ToLowerInvariant())"

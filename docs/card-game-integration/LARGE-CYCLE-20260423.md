@@ -68,3 +68,120 @@ Run one real autopilot -> relay cycle against `D:\Unity\card game` through the o
   - a peer can leave the relay `Active` with no progress until well after the watchdog expires
 - After this patch, that state should surface as `relay_hung` quickly enough for a non-technical operator to stop waiting and prepare a fresh session.
 - Unity MCP was available, but this cycle did not provide evidence that the relay peers actually used it.
+
+## Follow-up run after budget and manager-guard changes
+
+- Real GUI operator path:
+  - `scripts/gui-smoke/run-gui-easy-operator.ps1 -CardGameRoot 'D:\Unity\card game' -TaskSlug 'tool-qa-menu-coverage-matrix' -TimeoutSeconds 600`
+- Screenshots:
+  - `scripts/gui-smoke/out-easy-operator/20260423-125632-after-launch.png`
+  - `scripts/gui-smoke/out-easy-operator/20260423-125632-after-config.png`
+  - `scripts/gui-smoke/out-easy-operator/20260423-130437-after-easy-start.png`
+
+### What improved
+
+- The session no longer failed on the earlier `state.json missing` completion path.
+- The operator surface stopped waiting and surfaced the stop condition directly.
+- The relay completed one successful bounded cycle on session `tool-qa-menu-coverage-matrix-20260423-125639`.
+
+### New issues found
+
+1. Intentional one-cycle pauses were misclassified as blockers.
+   - Relay signal:
+     - `[RELAY_DONE] false status=Paused reason=Paused_intentionally_after_one_successful_relay_cycle.`
+   - Manager signal still surfaced:
+     - `overall=relay_paused_error`
+     - `action=fix_blocker`
+
+2. Unity MCP still was not actually used by the peer during the QA/editor slice.
+   - Compact evidence:
+     - `[RELAY_EVIDENCE] unity_mcp=not-observed count=0`
+   - The prompt explicitly asked for Unity MCP and named suitable tools, but the peer still spent its bounded cycle on shell/document reads.
+
+### Follow-up improvements added
+
+- `Get-CardGameLoopStatus.ps1`
+  - treats `Paused intentionally after one successful relay cycle.` as resumable `run`, not `blocked`
+- `Get-CardGameManagerSignal.ps1`
+  - emits `relay_cycle_complete` with `success=true` for the intentional one-cycle pause path
+- `Get-CardGameRelayEvidence.ps1`
+  - emits `unity_mcp_required` and `unity_mcp_required_but_missing`
+  - upgrades the compact marker to `[RELAY_EVIDENCE] unity_mcp=required-but-missing count=0` when the task asked for Unity MCP but the peer never used it
+- `profiles/card-game/prompt-prefix.md`
+  - now requires at least one Unity MCP verification action for `qa-editor` / `Tools/QA/*` slices when MCP is available
+
+## Four-turn GUI worksession with Unity MCP task
+
+- Real GUI worksession path:
+  - `scripts/gui-smoke/run-gui-worksession.ps1` with session `tool-qa-menu-coverage-matrix-20260423-130655`
+  - turns: `4`
+- Screenshots:
+  - `scripts/gui-smoke/out-worksession/20260423-130721-after-launch.png`
+  - `scripts/gui-smoke/out-worksession/20260423-130722-after-config.png`
+  - `scripts/gui-smoke/out-worksession/20260423-130819-after-check-adapters.png`
+  - `scripts/gui-smoke/out-worksession/20260423-130825-after-start.png`
+  - `scripts/gui-smoke/out-worksession/20260423-132153-after-autorun.png`
+
+### What this proved
+
+- Relay peers did use Unity MCP in a real session.
+- Compact event evidence showed Codex calling:
+  - `unityMCP/read_console`
+  - `unityMCP/manage_editor` with `play`
+  - `unityMCP/execute_menu_item` for `Tools/QA/Navigate/Go To ProbeResult`
+  - `unityMCP/manage_editor` with `stop`
+- The MCP call reached completion and returned `[QA-*]` console data, so the missing piece was not peer capability.
+
+### New blocker found
+
+1. The broker still paused the session after the first observed MCP action.
+   - Even though the UI had dangerous auto-approve enabled, the relay moved to `AwaitingApproval` because policy-gap approvals were queued after the fact and the Desktop auto-approve path only handled broker-routed interactive approval requests.
+   - Manager signal also mislabeled this state as `relay_ready`.
+
+### Follow-up improvements added
+
+- `MainWindow.xaml.cs`
+  - auto-resolves queued approvals when dangerous auto-approve mode is enabled
+- `Get-CardGameManagerSignal.ps1`
+  - adds `approval_required` / `review_pending_approval` for `AwaitingApproval`
+- `Get-CardGameLoopStatus.ps1`
+  - treats `AwaitingApproval` as `blocked` instead of `run`
+- `Get-CardGameRelayEvidence.ps1`
+  - now counts real `mcp_tool_call` activity
+  - now recognizes `unityMCP` server calls as Unity MCP evidence
+  - can distinguish `unity_mcp=approval-blocked` from `required-but-missing`
+
+## Final follow-up run after queued-approval auto-resolve
+
+- Real GUI worksession path:
+  - `scripts/gui-smoke/run-gui-worksession.ps1` with session `tool-qa-menu-coverage-matrix-20260423-132505`
+  - turns: `4`
+- Screenshots:
+  - `scripts/gui-smoke/out-worksession/20260423-132522-after-launch.png`
+  - `scripts/gui-smoke/out-worksession/20260423-132524-after-config.png`
+  - `scripts/gui-smoke/out-worksession/20260423-132544-after-check-adapters.png`
+  - `scripts/gui-smoke/out-worksession/20260423-132554-after-start.png`
+  - `scripts/gui-smoke/out-worksession/20260423-133904-after-autorun.png`
+
+### What this proved
+
+- Unity MCP is now confirmed in a real relay session with compact evidence:
+  - `[RELAY_EVIDENCE] unity_mcp=observed count=4`
+- Compact manager surface recovered correctly after the process disappeared:
+  - `overall=relay_dead`
+  - `action=prepare_fresh_session`
+- Auto-approve no longer leaves the session stuck forever in `AwaitingApproval` for queued broker approvals.
+
+### Remaining issue after this run
+
+1. The peer reached Unity MCP successfully, then later triggered a web tool review and the relay process disappeared after the queued web approval was auto-resolved.
+   - Evidence from the same session:
+     - `mcp.requested` / `mcp.completed` for `unityMCP/read_console`
+     - `approval.queue.resolved` and `session.resumed` for `Web Tool Approval`
+   - This is a different blocker from the original Unity MCP problem.
+   - It also wastes tokens for Unity-local tasks because web activity was unnecessary here.
+
+### Follow-up improvement added
+
+- `profiles/card-game/prompt-prefix.md`
+  - now explicitly forbids web/browser tools unless the current relay task truly requires internet research
