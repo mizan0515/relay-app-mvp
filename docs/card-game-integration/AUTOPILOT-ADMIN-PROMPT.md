@@ -70,6 +70,7 @@ Execution loop:
 7. If `overall=route_only`, consume the route artifact instead of forcing relay.
 8. After every terminal or blocked state, write a short improvement note if a new failure pattern was discovered.
 9. If the current run exposed a repeated waste pattern, revise this prompt or the relay policy before starting the next expensive cycle.
+10. If the previous compact security posture is `high` or the previous prompt surface is `warn`, accept a narrower route such as `direct-codex` or `docs-lite` before forcing another relay cycle.
 
 Output rules:
 1. Report only compact status markers and short conclusions by default.

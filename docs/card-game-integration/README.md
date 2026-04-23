@@ -28,6 +28,10 @@ call when a task needs Codex <-> Claude peer turns.
   - centrally approved tool registry for compact artifacts, relay runtimes, script runners, and Unity MCP
 - `profiles/card-game/policy-registry.json`
   - centrally approved policy registry for compact-artifact discipline, forbidden-tool rules, and required evidence contracts
+- `profiles/card-game/prompt-slim-policy.json`
+  - compact threshold policy for session prompt, skill bundle, and operator prompt size
+- `profiles/card-game/route-posture-policy.json`
+  - posture-aware routing policy that narrows the next slice when the previous compact security posture or prompt surface says the last path was too risky or too wide
 - `scripts/card-game/Install-CardGameProfile.ps1`
   - installs the card-game profile into `%LocalAppData%\CodexClaudeRelayMvp`
 - `scripts/card-game/New-CardGameSessionPrompt.ps1`
@@ -122,6 +126,7 @@ call when a task needs Codex <-> Claude peer turns.
     desktop relay. Consume the generated route artifact and execute the
     cheaper path instead.
 17. For `qa-editor` slices, treat `unity_mcp_observed` as required evidence instead of a soft preference.
+18. If the previous compact security posture is `high` or the previous prompt surface is `warn`, let admission narrow the next execution mode automatically before another expensive relay cycle.
 
 ## Operator Quick Path
 

@@ -59,6 +59,7 @@
 - extend ops dashboard with a single security posture section
 - unify identity, registry, policy, anomaly, and remediation status into one operator view
 - status: initial compact implementation added via `generated-security-posture.*`
+- route follow-through: use the previous compact posture and prompt-surface result to downshift the next execution mode before another expensive relay cycle
 
 ## Token-efficiency posture
 
