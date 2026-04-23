@@ -586,7 +586,8 @@ public partial class MainWindow : Window
     private async Task RunTurnBatchCoreAsync(
         int turns,
         string successPauseReason,
-        string successStatusMessage)
+        string successStatusMessage,
+        CancellationToken cancellationToken = default)
     {
         for (var i = 0; i < turns; i++)
         {
@@ -601,7 +602,7 @@ public partial class MainWindow : Window
             StatusMessageTextBlock.Text = $"Running turn {turnNumber} of {turns} on {_broker.State.ActiveAgent}...";
             RefreshUi();
             await YieldToUiAsync();
-            var result = await _broker.AdvanceAsync(CancellationToken.None);
+            var result = await _broker.AdvanceAsync(cancellationToken);
             StatusMessageTextBlock.Text = result.Message;
             RefreshUi();
 
@@ -614,7 +615,7 @@ public partial class MainWindow : Window
 
         if (_broker is not null)
         {
-            await _broker.PauseAsync(successPauseReason, CancellationToken.None);
+            await _broker.PauseAsync(successPauseReason, cancellationToken);
             StatusMessageTextBlock.Text = successStatusMessage;
             RefreshUi();
         }
@@ -2743,12 +2744,12 @@ public partial class MainWindow : Window
                     await RefreshManagedStatusAsync(cancellationToken);
                     if (forceRelay)
                     {
-                        return await RunPreparedManagedSessionAsync(cardGameRoot, turns, cancellationToken);
+                        return await RunPreparedManagedSessionAsync(cardGameRoot, turns, useEasyWatchdog: true, cancellationToken);
                     }
                     continue;
 
                 case "run_relay_session":
-                    return await RunPreparedManagedSessionAsync(cardGameRoot, turns, cancellationToken);
+                    return await RunPreparedManagedSessionAsync(cardGameRoot, turns, useEasyWatchdog: forceRelay, cancellationToken);
 
                 case "complete_terminal_session":
                 {
@@ -2791,6 +2792,7 @@ public partial class MainWindow : Window
     private async Task<ManagedControllerResult> RunPreparedManagedSessionAsync(
         string cardGameRoot,
         int turns,
+        bool useEasyWatchdog,
         CancellationToken cancellationToken)
     {
         var prepared = await LoadPreparedManagedSessionAsync(cancellationToken);
@@ -2810,14 +2812,52 @@ public partial class MainWindow : Window
             TryLoadSessionBootstrap(),
             cancellationToken);
 
-        await RunTurnBatchCoreAsync(
-            turns,
-            successPauseReason: turns == 2
-                ? "Paused intentionally after one successful relay cycle."
-                : $"Paused intentionally after {turns} managed relay turns.",
-            successStatusMessage: turns == 2
-                ? "Managed controller completed one cycle and paused intentionally."
-                : $"Managed controller completed {turns} turns and paused intentionally.");
+        string? watchdogStopReason = null;
+        if (useEasyWatchdog)
+        {
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            var watchdogTask = WatchEasyOperatorRelayAsync(cardGameRoot, prepared.SessionId, linkedCts, reason => watchdogStopReason = reason);
+
+            try
+            {
+                await RunTurnBatchCoreAsync(
+                    turns,
+                    successPauseReason: turns == 2
+                        ? "Paused intentionally after one successful relay cycle."
+                        : $"Paused intentionally after {turns} managed relay turns.",
+                    successStatusMessage: turns == 2
+                        ? "Managed controller completed one cycle and paused intentionally."
+                        : $"Managed controller completed {turns} turns and paused intentionally.",
+                    linkedCts.Token);
+            }
+            catch (OperationCanceledException) when (!string.IsNullOrWhiteSpace(watchdogStopReason))
+            {
+                return new ManagedControllerResult(false, watchdogStopReason);
+            }
+            finally
+            {
+                linkedCts.Cancel();
+                try
+                {
+                    await watchdogTask;
+                }
+                catch (OperationCanceledException)
+                {
+                }
+            }
+        }
+        else
+        {
+            await RunTurnBatchCoreAsync(
+                turns,
+                successPauseReason: turns == 2
+                    ? "Paused intentionally after one successful relay cycle."
+                    : $"Paused intentionally after {turns} managed relay turns.",
+                successStatusMessage: turns == 2
+                    ? "Managed controller completed one cycle and paused intentionally."
+                    : $"Managed controller completed {turns} turns and paused intentionally.",
+                cancellationToken);
+        }
 
         var completionResult = await CompleteManagedRelaySessionAsync(
             cardGameRoot,
@@ -2833,6 +2873,39 @@ public partial class MainWindow : Window
 
         await RefreshManagedStatusAsync(cancellationToken);
         return new ManagedControllerResult(true, $"Managed controller executed session {prepared.SessionId}.", CompletedRelaySession: true);
+    }
+
+    private async Task WatchEasyOperatorRelayAsync(
+        string cardGameRoot,
+        string expectedSessionId,
+        CancellationTokenSource cancellationTokenSource,
+        Action<string> setStopReason)
+    {
+        while (!cancellationTokenSource.IsCancellationRequested)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(3), cancellationTokenSource.Token);
+
+            var managerSignal = await LoadManagerSignalAsync(cardGameRoot, cancellationTokenSource.Token);
+            if (managerSignal is null)
+            {
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(expectedSessionId) &&
+                !string.IsNullOrWhiteSpace(managerSignal.SessionId) &&
+                !string.Equals(managerSignal.SessionId, expectedSessionId, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (string.Equals(managerSignal.SuggestedDesktopAction, "prepare_fresh_session", StringComparison.Ordinal) ||
+                string.Equals(managerSignal.OverallStatus, "relay_dead", StringComparison.Ordinal))
+            {
+                setStopReason("Easy Start noticed that the relay died during the safe session. Start again to prepare a fresh session.");
+                cancellationTokenSource.Cancel();
+                return;
+            }
+        }
     }
 
     private async Task<ManagedCardGamePreparation> LoadPreparedManagedSessionAsync(CancellationToken cancellationToken)
