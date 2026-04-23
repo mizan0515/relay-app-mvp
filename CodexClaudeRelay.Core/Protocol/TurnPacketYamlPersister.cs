@@ -33,6 +33,12 @@ public static class TurnPacketYamlPersister
         sb.Append("turn: ").Append(packet.Turn).Append('\n');
         sb.Append("session_id: ").Append(Scalar(packet.SessionId)).Append('\n');
 
+        sb.Append("contract:\n");
+        var contract = packet.Contract;
+        sb.Append("  status: ").Append(Scalar(contract.Status)).Append('\n');
+        AppendList(sb, "  checkpoints", contract.Checkpoints);
+        AppendList(sb, "  amendments", contract.Amendments);
+
         sb.Append("handoff:\n");
         var h = packet.Handoff;
         sb.Append("  closeout_kind: ").Append(Scalar(h.CloseoutKind)).Append('\n');
@@ -54,6 +60,13 @@ public static class TurnPacketYamlPersister
         }
 
         sb.Append("peer_review:\n");
+        sb.Append("  project_analysis: ").Append(Scalar(packet.PeerReview.ProjectAnalysis)).Append('\n');
+        sb.Append("  task_model_review:\n");
+        sb.Append("    status: ").Append(Scalar(packet.PeerReview.TaskModelReview.Status)).Append('\n');
+        AppendList(sb, "    coverage_gaps", packet.PeerReview.TaskModelReview.CoverageGaps);
+        AppendList(sb, "    scope_creep", packet.PeerReview.TaskModelReview.ScopeCreep);
+        AppendList(sb, "    risk_followups", packet.PeerReview.TaskModelReview.RiskFollowups);
+        AppendList(sb, "    amendments", packet.PeerReview.TaskModelReview.Amendments);
         var results = packet.PeerReview.CheckpointResults;
         if (results.Count == 0)
         {
@@ -69,8 +82,43 @@ public static class TurnPacketYamlPersister
                 sb.Append("      evidence_ref: ").Append(Scalar(r.EvidenceRef)).Append('\n');
             }
         }
+        AppendList(sb, "  issues_found", packet.PeerReview.IssuesFound);
+        AppendList(sb, "  fixes_applied", packet.PeerReview.FixesApplied);
+
+        sb.Append("my_work:\n");
+        var myWork = packet.MyWork;
+        sb.Append("  plan: ").Append(Scalar(myWork.Plan)).Append('\n');
+        sb.Append("  changes:\n");
+        AppendList(sb, "    files_modified", myWork.Changes.FilesModified);
+        AppendList(sb, "    files_created", myWork.Changes.FilesCreated);
+        sb.Append("    summary: ").Append(Scalar(myWork.Changes.Summary)).Append('\n');
+        sb.Append("  self_iterations: ").Append(myWork.SelfIterations).Append('\n');
+        sb.Append("  evidence:\n");
+        AppendList(sb, "    commands", myWork.Evidence.Commands);
+        AppendList(sb, "    artifacts", myWork.Evidence.Artifacts);
+        sb.Append("  verification: ").Append(Scalar(myWork.Verification)).Append('\n');
+        AppendList(sb, "  open_risks", myWork.OpenRisks);
+        sb.Append("  confidence: ").Append(Scalar(myWork.Confidence)).Append('\n');
 
         return sb.ToString();
+    }
+
+    private static void AppendList(StringBuilder sb, string key, IReadOnlyList<string> values)
+    {
+        if (values.Count == 0)
+        {
+            sb.Append(key).Append(": []\n");
+            return;
+        }
+
+        sb.Append(key).Append(":\n");
+        foreach (var value in values)
+        {
+            sb.Append("  ", 0, Math.Max(0, 0));
+            var indent = key.StartsWith("    ", StringComparison.Ordinal) ? "      " :
+                key.StartsWith("  ", StringComparison.Ordinal) ? "    " : "  ";
+            sb.Append(indent).Append("- ").Append(Scalar(value)).Append('\n');
+        }
     }
 
     private static string Scalar(string value)

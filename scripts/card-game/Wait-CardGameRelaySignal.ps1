@@ -3,7 +3,7 @@ param(
   [int]$TimeoutSeconds = 1800,
   [int]$PollSeconds = 10,
   [int]$StaleActiveSeconds = 30,
-  [string[]]$TerminalStatuses = @('Paused', 'Completed', 'Failed', 'Error', 'Stopped')
+  [string[]]$TerminalStatuses = @('Paused', 'Completed', 'Failed', 'Error', 'Stopped', 'Stale')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -26,10 +26,9 @@ while ((Get-Date) -lt $deadline) {
     $lastMarker = [string]$signal.signal_marker
   }
 
-  if (-not $signal.relay_process_running -and
-      [string]$signal.derived_status -eq 'StaleActive' -and
-      [int]$signal.last_progress_age_seconds -ge $StaleActiveSeconds) {
-    Write-Host "[RELAY_DONE] false status=stale_active reason=relay_process_missing"
+  if (([string]$signal.derived_status -eq 'StaleActive' -and [int]$signal.last_progress_age_seconds -ge $StaleActiveSeconds) -or
+      [string]$signal.status -eq 'Stale') {
+    Write-Host "[RELAY_DONE] true status=stale reason=relay_process_missing"
     exit 1
   }
 

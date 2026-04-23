@@ -35,8 +35,10 @@ public static class PacketIO
         string from = AgentRole.Codex;
         int turn = 0;
         string sessionId = string.Empty;
+        var contract = new TurnContract();
         var handoff = new TurnHandoff();
-        var checkpoints = new List<CheckpointResult>();
+        var peerReview = new PeerReview();
+        var myWork = new MyWork();
 
         for (int i = 0; i < lines.Length; i++)
         {
@@ -48,6 +50,12 @@ public static class PacketIO
             if (TryTopScalar(line, "turn", out v)) { turn = int.Parse(v, System.Globalization.CultureInfo.InvariantCulture); continue; }
             if (TryTopScalar(line, "session_id", out v)) { sessionId = v; continue; }
 
+            if (line == "contract:")
+            {
+                contract = ParseContract(lines, ref i);
+                continue;
+            }
+
             if (line == "handoff:")
             {
                 handoff = ParseHandoff(lines, ref i);
@@ -56,7 +64,13 @@ public static class PacketIO
 
             if (line == "peer_review:")
             {
-                checkpoints = ParsePeerReview(lines, ref i);
+                peerReview = ParsePeerReview(lines, ref i);
+                continue;
+            }
+
+            if (line == "my_work:")
+            {
+                myWork = ParseMyWork(lines, ref i);
                 continue;
             }
         }
@@ -67,8 +81,43 @@ public static class PacketIO
             From = from,
             Turn = turn,
             SessionId = sessionId,
+            Contract = contract,
             Handoff = handoff,
-            PeerReview = new PeerReview { CheckpointResults = checkpoints },
+            PeerReview = peerReview,
+            MyWork = myWork,
+        };
+    }
+
+    private static TurnContract ParseContract(string[] lines, ref int i)
+    {
+        string status = "accepted";
+        var checkpoints = new List<string>();
+        var amendments = new List<string>();
+
+        while (i + 1 < lines.Length && lines[i + 1].StartsWith("  ") && !lines[i + 1].StartsWith("    "))
+        {
+            i++;
+            var trimmed = lines[i].Substring(2);
+            if (TryScalar(trimmed, "status", out var v)) { status = v; continue; }
+            if (trimmed == "checkpoints: []") { checkpoints.Clear(); continue; }
+            if (trimmed == "checkpoints:")
+            {
+                checkpoints = ParseList(lines, ref i, "    - ");
+                continue;
+            }
+            if (trimmed == "amendments: []") { amendments.Clear(); continue; }
+            if (trimmed == "amendments:")
+            {
+                amendments = ParseList(lines, ref i, "    - ");
+                continue;
+            }
+        }
+
+        return new TurnContract
+        {
+            Status = status,
+            Checkpoints = checkpoints,
+            Amendments = amendments,
         };
     }
 
@@ -118,19 +167,80 @@ public static class PacketIO
         };
     }
 
-    private static List<CheckpointResult> ParsePeerReview(string[] lines, ref int i)
+    private static PeerReview ParsePeerReview(string[] lines, ref int i)
     {
+        string projectAnalysis = string.Empty;
+        var taskModelReview = new TaskModelReview();
         var results = new List<CheckpointResult>();
+        var issuesFound = new List<string>();
+        var fixesApplied = new List<string>();
 
-        if (i + 1 < lines.Length && lines[i + 1].Trim() == "checkpoint_results: []")
+        while (i + 1 < lines.Length && lines[i + 1].StartsWith("  ") && !IsTopLevel(lines[i + 1]))
         {
             i++;
-            return results;
-        }
-        if (i + 1 >= lines.Length || lines[i + 1].Trim() != "checkpoint_results:")
-            return results;
-        i++; // consume `  checkpoint_results:`
+            var trimmed = lines[i].Substring(2);
 
+            if (TryScalar(trimmed, "project_analysis", out var scalar))
+            {
+                projectAnalysis = scalar;
+                continue;
+            }
+
+            if (trimmed == "task_model_review:")
+            {
+                taskModelReview = ParseTaskModelReview(lines, ref i);
+                continue;
+            }
+
+            if (trimmed == "checkpoint_results: []")
+            {
+                results.Clear();
+                continue;
+            }
+
+            if (trimmed == "checkpoint_results:")
+            {
+                results = ParseCheckpointResults(lines, ref i);
+                continue;
+            }
+
+            if (trimmed == "issues_found: []")
+            {
+                issuesFound.Clear();
+                continue;
+            }
+
+            if (trimmed == "issues_found:")
+            {
+                issuesFound = ParseList(lines, ref i, "    - ");
+                continue;
+            }
+
+            if (trimmed == "fixes_applied: []")
+            {
+                fixesApplied.Clear();
+                continue;
+            }
+
+            if (trimmed == "fixes_applied:")
+            {
+                fixesApplied = ParseList(lines, ref i, "    - ");
+            }
+        }
+
+        return new PeerReview
+        {
+            ProjectAnalysis = projectAnalysis,
+            TaskModelReview = taskModelReview,
+            CheckpointResults = results,
+            IssuesFound = issuesFound,
+            FixesApplied = fixesApplied,
+        };
+    }
+
+    private static List<CheckpointResult> ParseCheckpointResults(string[] lines, ref int i)
+    {
+        var results = new List<CheckpointResult>();
         while (i + 1 < lines.Length && lines[i + 1].StartsWith("    - checkpoint_id:"))
         {
             i++;
@@ -156,6 +266,156 @@ public static class PacketIO
 
         return results;
     }
+
+    private static TaskModelReview ParseTaskModelReview(string[] lines, ref int i)
+    {
+        string status = "aligned";
+        var coverageGaps = new List<string>();
+        var scopeCreep = new List<string>();
+        var riskFollowups = new List<string>();
+        var amendments = new List<string>();
+
+        while (i + 1 < lines.Length && lines[i + 1].StartsWith("    "))
+        {
+            i++;
+            var trimmed = lines[i].Substring(4);
+            if (TryScalar(trimmed, "status", out var v)) { status = v; continue; }
+            if (trimmed == "coverage_gaps: []") { coverageGaps.Clear(); continue; }
+            if (trimmed == "coverage_gaps:") { coverageGaps = ParseList(lines, ref i, "      - "); continue; }
+            if (trimmed == "scope_creep: []") { scopeCreep.Clear(); continue; }
+            if (trimmed == "scope_creep:") { scopeCreep = ParseList(lines, ref i, "      - "); continue; }
+            if (trimmed == "risk_followups: []") { riskFollowups.Clear(); continue; }
+            if (trimmed == "risk_followups:") { riskFollowups = ParseList(lines, ref i, "      - "); continue; }
+            if (trimmed == "amendments: []") { amendments.Clear(); continue; }
+            if (trimmed == "amendments:") { amendments = ParseList(lines, ref i, "      - "); continue; }
+        }
+
+        return new TaskModelReview
+        {
+            Status = status,
+            CoverageGaps = coverageGaps,
+            ScopeCreep = scopeCreep,
+            RiskFollowups = riskFollowups,
+            Amendments = amendments,
+        };
+    }
+
+    private static MyWork ParseMyWork(string[] lines, ref int i)
+    {
+        string plan = string.Empty;
+        string verification = string.Empty;
+        string confidence = "medium";
+        int selfIterations = 0;
+        var changes = new WorkChanges();
+        var evidence = new WorkEvidence();
+        var openRisks = new List<string>();
+
+        while (i + 1 < lines.Length && lines[i + 1].StartsWith("  ") && !IsTopLevel(lines[i + 1]))
+        {
+            i++;
+            var trimmed = lines[i].Substring(2);
+            if (TryScalar(trimmed, "plan", out var v)) { plan = v; continue; }
+            if (TryScalar(trimmed, "self_iterations", out v))
+            {
+                selfIterations = int.Parse(v, System.Globalization.CultureInfo.InvariantCulture);
+                continue;
+            }
+            if (TryScalar(trimmed, "verification", out v)) { verification = v; continue; }
+            if (TryScalar(trimmed, "confidence", out v)) { confidence = v; continue; }
+            if (trimmed == "changes:")
+            {
+                changes = ParseWorkChanges(lines, ref i);
+                continue;
+            }
+            if (trimmed == "evidence:")
+            {
+                evidence = ParseWorkEvidence(lines, ref i);
+                continue;
+            }
+            if (trimmed == "open_risks: []")
+            {
+                openRisks.Clear();
+                continue;
+            }
+            if (trimmed == "open_risks:")
+            {
+                openRisks = ParseList(lines, ref i, "    - ");
+            }
+        }
+
+        return new MyWork
+        {
+            Plan = plan,
+            Changes = changes,
+            SelfIterations = selfIterations,
+            Evidence = evidence,
+            Verification = verification,
+            OpenRisks = openRisks,
+            Confidence = confidence,
+        };
+    }
+
+    private static WorkChanges ParseWorkChanges(string[] lines, ref int i)
+    {
+        var filesModified = new List<string>();
+        var filesCreated = new List<string>();
+        string summary = string.Empty;
+
+        while (i + 1 < lines.Length && lines[i + 1].StartsWith("    "))
+        {
+            i++;
+            var trimmed = lines[i].Substring(4);
+            if (trimmed == "files_modified: []") { filesModified.Clear(); continue; }
+            if (trimmed == "files_modified:") { filesModified = ParseList(lines, ref i, "      - "); continue; }
+            if (trimmed == "files_created: []") { filesCreated.Clear(); continue; }
+            if (trimmed == "files_created:") { filesCreated = ParseList(lines, ref i, "      - "); continue; }
+            if (TryScalar(trimmed, "summary", out var v)) { summary = v; continue; }
+        }
+
+        return new WorkChanges
+        {
+            FilesModified = filesModified,
+            FilesCreated = filesCreated,
+            Summary = summary,
+        };
+    }
+
+    private static WorkEvidence ParseWorkEvidence(string[] lines, ref int i)
+    {
+        var commands = new List<string>();
+        var artifacts = new List<string>();
+
+        while (i + 1 < lines.Length && lines[i + 1].StartsWith("    "))
+        {
+            i++;
+            var trimmed = lines[i].Substring(4);
+            if (trimmed == "commands: []") { commands.Clear(); continue; }
+            if (trimmed == "commands:") { commands = ParseList(lines, ref i, "      - "); continue; }
+            if (trimmed == "artifacts: []") { artifacts.Clear(); continue; }
+            if (trimmed == "artifacts:") { artifacts = ParseList(lines, ref i, "      - "); continue; }
+        }
+
+        return new WorkEvidence
+        {
+            Commands = commands,
+            Artifacts = artifacts,
+        };
+    }
+
+    private static List<string> ParseList(string[] lines, ref int i, string itemPrefix)
+    {
+        var values = new List<string>();
+        while (i + 1 < lines.Length && lines[i + 1].StartsWith(itemPrefix, StringComparison.Ordinal))
+        {
+            i++;
+            values.Add(Unquote(lines[i].Substring(itemPrefix.Length)));
+        }
+
+        return values;
+    }
+
+    private static bool IsTopLevel(string line) =>
+        !line.StartsWith(" ", StringComparison.Ordinal);
 
     private static bool TryTopScalar(string line, string key, out string value)
         => TryScalar(line, key, out value);

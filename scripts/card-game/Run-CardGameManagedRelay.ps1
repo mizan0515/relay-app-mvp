@@ -68,11 +68,15 @@ if (Test-Path -LiteralPath $loopStatusPath) {
 
 $signalJson = & powershell -ExecutionPolicy Bypass -File (Join-Path $scriptRoot 'Get-CardGameRelaySignal.ps1') -CardGameRoot $CardGameRoot
 $signal = $signalJson | ConvertFrom-Json
+$managerSignalJson = & powershell -ExecutionPolicy Bypass -File (Join-Path $scriptRoot 'Get-CardGameManagerSignal.ps1') -CardGameRoot $CardGameRoot
+$managerSignal = $managerSignalJson | ConvertFrom-Json
 
 Write-Host ''
 Write-Host '=== Managed Relay Signal ==='
 Write-Host $signal.signal_marker
 Write-Host $signal.done_marker
+Write-Host $managerSignal.manager_signal_marker
+Write-Host $managerSignal.manager_done_marker
 
 if ($AutoCompleteTerminal -and ($signal.is_terminal -or @('Paused','Converged','Stopped','Failed') -contains [string]$signal.status)) {
   try {

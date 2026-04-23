@@ -135,6 +135,12 @@ public class BrokerConvergenceE2ETests
             Assert.Contains("\"session_status\": \"converged\"", backlogJson);
             Assert.Contains("\"closed_by_session_id\": \"sess-g7-e2e\"", backlogJson);
             Assert.Contains("\"converged_turn\": 2", backlogJson);
+
+            var learningPath = Path.Combine(tmpDir, "Document", "dialogue", "learning-memory", "session-outcomes.jsonl");
+            Assert.True(File.Exists(learningPath), $"learning record should exist at {learningPath}");
+            var learningJsonl = await File.ReadAllTextAsync(learningPath, CancellationToken.None);
+            Assert.Contains("\"session_id\":\"sess-g7-e2e\"", learningJsonl);
+            Assert.Contains("\"origin_backlog_id\":\"sess-g7-e2e\"", learningJsonl);
         }
         finally
         {

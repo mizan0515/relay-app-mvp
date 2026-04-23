@@ -29,6 +29,8 @@ public class TurnPacketYamlPersisterTests
         Assert.Contains("from: claude-code", yaml);
         Assert.Contains("turn: 2", yaml);
         Assert.Contains("session_id: 2026-04-18-g4", yaml);
+        Assert.Contains("contract:", yaml);
+        Assert.Contains("my_work:", yaml);
         Assert.Contains("closeout_kind: peer_handoff", yaml);
         Assert.Contains("ready_for_peer_verification: true", yaml);
     }
@@ -58,6 +60,7 @@ public class TurnPacketYamlPersisterTests
         Assert.Contains("- checkpoint_id: c2", yaml);
         Assert.Contains("status: FAIL", yaml);
         Assert.Contains("evidence_ref: \"logs/x.txt:42\"", yaml);
+        Assert.Contains("issues_found: []", yaml);
     }
 
     [Fact]
@@ -67,8 +70,10 @@ public class TurnPacketYamlPersisterTests
 
         var yaml = TurnPacketYamlPersister.Render(packet);
 
+        Assert.Contains("checkpoints: []", yaml);
         Assert.Contains("questions: []", yaml);
         Assert.Contains("checkpoint_results: []", yaml);
+        Assert.Contains("open_risks: []", yaml);
     }
 
     [Fact]
@@ -128,5 +133,56 @@ public class TurnPacketYamlPersisterTests
         var yaml = TurnPacketYamlPersister.Render(packet);
 
         Assert.Contains("next_task: \"review: evidence\"", yaml);
+    }
+
+    [Fact]
+    public void Render_emits_contract_peer_review_and_my_work_sections()
+    {
+        var packet = new TurnPacket
+        {
+            SessionId = "s",
+            Turn = 1,
+            Contract = new TurnContract
+            {
+                Status = "accepted",
+                Checkpoints = new[] { "C1", "C2" },
+            },
+            PeerReview = new PeerReview
+            {
+                ProjectAnalysis = "analysis",
+                TaskModelReview = new TaskModelReview
+                {
+                    RiskFollowups = new[] { "watch ui drift" },
+                },
+                IssuesFound = new[] { "C2 reported FAIL at logs/x.txt" },
+                FixesApplied = new[] { "updated popup tint" },
+            },
+            MyWork = new MyWork
+            {
+                Plan = "apply narrow fix",
+                Changes = new WorkChanges
+                {
+                    Summary = "updated popup tint",
+                },
+                Evidence = new WorkEvidence
+                {
+                    Artifacts = new[] { "logs/x.txt" },
+                },
+                Verification = "C1:PASS",
+                OpenRisks = new[] { "need peer review" },
+                Confidence = "medium",
+            },
+        };
+
+        var yaml = TurnPacketYamlPersister.Render(packet);
+
+        Assert.Contains("status: accepted", yaml);
+        Assert.Contains("checkpoints:", yaml);
+        Assert.Contains("project_analysis: analysis", yaml);
+        Assert.Contains("risk_followups:", yaml);
+        Assert.Contains("fixes_applied:", yaml);
+        Assert.Contains("plan: apply narrow fix", yaml);
+        Assert.Contains("artifacts:", yaml);
+        Assert.Contains("confidence: medium", yaml);
     }
 }

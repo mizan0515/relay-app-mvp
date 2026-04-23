@@ -330,6 +330,43 @@ public partial class MainWindow : Window
         });
     }
 
+    private async void EasyStartButton_Click(object sender, RoutedEventArgs e)
+    {
+        await RunOperationAsync("Starting the easy operator path...", async () =>
+        {
+            var managedCardGameRoot = string.IsNullOrWhiteSpace(ManagedCardGameRootTextBox.Text)
+                ? @"D:\Unity\card game"
+                : ManagedCardGameRootTextBox.Text.Trim();
+            var turns = ParseManagedTurns();
+
+            await RefreshManagedStatusAsync(CancellationToken.None);
+
+            for (var stepIndex = 1; stepIndex <= 24; stepIndex++)
+            {
+                var result = await ExecuteManagedControllerCycleAsync(
+                    managedCardGameRoot,
+                    turns,
+                    CancellationToken.None);
+                await RefreshManagedStatusAsync(CancellationToken.None);
+
+                var managerSignal = await LoadManagerSignalAsync(managedCardGameRoot, CancellationToken.None);
+                if (managerSignal is null)
+                {
+                    StatusMessageTextBlock.Text = "Easy Start stopped because the compact manager status is missing.";
+                    return;
+                }
+
+                if (!result.ShouldContinue || managerSignal.AttentionRequired || managerSignal.WaitShouldEnd)
+                {
+                    StatusMessageTextBlock.Text = $"Easy Start stopped after step {stepIndex}: {result.Message}";
+                    return;
+                }
+            }
+
+            StatusMessageTextBlock.Text = "Easy Start stopped after reaching its desktop safety limit. Refresh the compact status and continue if needed.";
+        });
+    }
+
     private async void RunManagedAutopilotLoopButton_Click(object sender, RoutedEventArgs e)
     {
         await RunOperationAsync("Running a managed autopilot desktop loop...", async () =>
@@ -1025,6 +1062,7 @@ public partial class MainWindow : Window
         RunManagedNextStepButton.IsEnabled = !_isBusy;
         RunManagedUntilAttentionButton.IsEnabled = !_isBusy;
         RunManagedAutopilotLoopButton.IsEnabled = !_isBusy;
+        EasyStartButton.IsEnabled = !_isBusy;
         RefreshManagedStatusButton.IsEnabled = !_isBusy;
         AutoRunButton.IsEnabled = !_isBusy;
         PauseButton.IsEnabled = !_isBusy;
@@ -2795,13 +2833,16 @@ public partial class MainWindow : Window
             ? @"D:\Unity\card game"
             : ManagedCardGameRootTextBox.Text.Trim();
         var managerSignal = await LoadManagerSignalAsync(cardGameRoot, cancellationToken);
+        var resolvedTaskSlug = !string.IsNullOrWhiteSpace(managerSignal?.ResolvedTaskSlug)
+            ? managerSignal.ResolvedTaskSlug
+            : ManagedTaskSlugTextBox.Text?.Trim() ?? string.Empty;
 
         ManagedStatusTextBox.Text = managerSignal is null
             ? "Managed status not available."
             : $"Overall: {managerSignal.OverallStatus}{Environment.NewLine}" +
               $"Reason: {managerSignal.Reason}{Environment.NewLine}" +
               $"Next action: {managerSignal.NextAction}{Environment.NewLine}" +
-              $"Task slug: {managerSignal.ResolvedTaskSlug}{Environment.NewLine}" +
+              $"Task slug: {resolvedTaskSlug}{Environment.NewLine}" +
               $"Session: {managerSignal.SessionId}{Environment.NewLine}" +
               $"Relay status: {managerSignal.RelayStatus}{Environment.NewLine}" +
               $"Suggested action: {managerSignal.SuggestedDesktopAction}{Environment.NewLine}" +
@@ -2809,7 +2850,40 @@ public partial class MainWindow : Window
               $"Attention required: {managerSignal.AttentionRequired}{Environment.NewLine}" +
               $"Marker: {managerSignal.ManagerSignalMarker}{Environment.NewLine}" +
               $"Done: {managerSignal.ManagerDoneMarker}";
+        EasyStatusTextBox.Text = managerSignal is null
+            ? "Easy status is not available."
+            : $"What is happening: {BuildEasyOverallLabel(managerSignal.OverallStatus)}{Environment.NewLine}" +
+              $"What the app is doing next: {BuildEasyActionLabel(managerSignal.SuggestedDesktopAction)}{Environment.NewLine}" +
+              $"Task: {resolvedTaskSlug}{Environment.NewLine}" +
+              $"Need a human now: {(managerSignal.AttentionRequired ? "yes" : "no")}{Environment.NewLine}" +
+              $"Can stop waiting now: {(managerSignal.WaitShouldEnd ? "yes" : "no")}";
     }
+
+    private static string BuildEasyOverallLabel(string overallStatus) => overallStatus switch
+    {
+        "relay_active" => "A relay session is running.",
+        "relay_ready" => "A prepared relay session is ready to run.",
+        "prepare_next" => "The app is preparing the next slice.",
+        "completion_pending" => "The session finished and needs write-back.",
+        "route_only" => "This slice should not run through DAD.",
+        "relay_dead" => "The previous relay session died and must be replaced.",
+        "blocked" => "The backlog or decision state is blocked.",
+        "halted" => "The project is halted on purpose.",
+        _ => "The app is waiting for the next safe step."
+    };
+
+    private static string BuildEasyActionLabel(string suggestedDesktopAction) => suggestedDesktopAction switch
+    {
+        "prepare_autopilot" => "Prepare the next safe slice.",
+        "prepare_fresh_session" => "Discard the dead session and prepare a fresh one.",
+        "run_relay_session" => "Run the prepared relay session now.",
+        "complete_terminal_session" => "Write the finished session back into autopilot state.",
+        "consume_route_artifact" => "Use the route artifact instead of starting DAD.",
+        "wait_for_signal" => "Do nothing and wait for the compact signal to change.",
+        "wait_for_operator" => "Stop and wait for a human decision.",
+        "fix_blocker" => "Stop and fix the blocker before continuing.",
+        _ => "Wait for the next compact status update."
+    };
 
     private async Task<ManagerSignalSummary?> LoadManagerSignalAsync(string cardGameRoot, CancellationToken cancellationToken)
     {

@@ -25,7 +25,20 @@ public class RoundTripArtifactSmokeTests
         await HandoffArtifactPersister.WriteAsync(packet, Path.Combine(sessionDir, $"turn-{turn}-handoff.md"));
         await TurnPacketYamlPersister.WriteAsync(packet, Path.Combine(sessionDir, $"turn-{turn}.yaml"));
 
-        var snap = new SessionStateSnapshot(sessionId, turn + 1, target, DateTimeOffset.Now);
+        var snap = new SessionStateSnapshot
+        {
+            SessionId = sessionId,
+            SessionStatus = "active",
+            CurrentTurn = turn + 1,
+            MaxTurns = 5,
+            LastAgent = source,
+            OriginBacklogId = sessionId,
+            TaskSummary = $"round-trip {sessionId}",
+            ContractStatus = "accepted",
+            Packets = Enumerable.Range(1, turn)
+                .Select(n => $"Document/dialogue/sessions/{sessionId}/turn-{n}.yaml")
+                .ToArray(),
+        };
         await SessionStatePersister.WriteAsync(snap, Path.Combine(sessionDir, "state.json"));
     }
 
@@ -51,7 +64,7 @@ public class RoundTripArtifactSmokeTests
 
             var state = await File.ReadAllTextAsync(Path.Combine(sessionDir, "state.json"));
             Assert.Contains("\"current_turn\": 3", state);
-            Assert.Contains("\"active_agent\": \"codex\"", state);
+            Assert.Contains("\"last_agent\": \"claude-code\"", state);
 
             var turn1Yaml = await File.ReadAllTextAsync(Path.Combine(sessionDir, "turn-1.yaml"));
             Assert.Contains("from: codex", turn1Yaml);
@@ -83,7 +96,7 @@ public class RoundTripArtifactSmokeTests
             Assert.Equal(5, Directory.GetFiles(sessionDir).Length);
             var state = await File.ReadAllTextAsync(Path.Combine(sessionDir, "state.json"));
             Assert.Contains("\"current_turn\": 3", state);
-            Assert.Contains("\"active_agent\": \"claude-code\"", state);
+            Assert.Contains("\"last_agent\": \"codex\"", state);
         }
         finally
         {

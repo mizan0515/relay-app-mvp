@@ -130,6 +130,10 @@ elseif ($relaySignal -and [string]$relaySignal.status -eq 'Active') {
   $nextAction = 'run'
   $reasons.Add("Relay live signal reports active session $($relaySignal.session_id) with role $($relaySignal.active_role) at turn $($relaySignal.current_turn).")
 }
+elseif ($relaySignal -and [string]$relaySignal.status -eq 'Stale') {
+  $nextAction = 'prepare'
+  $reasons.Add("Relay live signal was normalized to stale for session $($relaySignal.session_id); prepare a fresh session instead of waiting.")
+}
 elseif ($manifest -and $sessionId -and $executionMode -and $executionMode -ne 'relay-dad') {
   $nextAction = 'route'
   $reasons.Add("Session $sessionId is prepared but routed to $executionMode instead of desktop relay.")

@@ -104,12 +104,33 @@ public sealed class RelayBroker : IBrokerCostContext
         string sessionId,
         string firstRole,
         string firstPrompt,
+        RelaySessionBootstrap? bootstrap,
         CancellationToken cancellationToken)
     {
+        var resolvedScope = string.IsNullOrWhiteSpace(bootstrap?.Scope)
+            ? InferScope(_options.MaxTurnsPerSession)
+            : bootstrap!.Scope;
+        var resolvedTaskSummary = !string.IsNullOrWhiteSpace(bootstrap?.TaskSummary)
+            ? bootstrap!.TaskSummary
+            : SummarizePrompt(firstPrompt);
+        var resolvedOriginBacklogId = !string.IsNullOrWhiteSpace(bootstrap?.OriginBacklogId)
+            ? bootstrap!.OriginBacklogId
+            : sessionId;
+        var resolvedTaskBucket = bootstrap?.TaskBucket ?? string.Empty;
+        var resolvedContractStatus = string.IsNullOrWhiteSpace(bootstrap?.ContractStatus)
+            ? "accepted"
+            : bootstrap!.ContractStatus;
+
         State = new RelaySessionState
         {
             SessionId = sessionId,
             Status = RelaySessionStatus.Active,
+            Mode = string.IsNullOrWhiteSpace(bootstrap?.Mode) ? "hybrid" : bootstrap!.Mode,
+            Scope = resolvedScope,
+            OriginBacklogId = resolvedOriginBacklogId,
+            TaskBucket = resolvedTaskBucket,
+            TaskSummary = resolvedTaskSummary,
+            ContractStatus = resolvedContractStatus,
             ActiveAgent = firstRole,
             CurrentTurn = 1,
             PendingPrompt = firstPrompt,
@@ -119,12 +140,14 @@ public sealed class RelayBroker : IBrokerCostContext
             ApprovalQueue = [],
             SessionApprovalRules = [],
             PolicyGapAdvisoriesFired = [],
+            MetaImprovements = [],
+            TerminalLearningRecordWritten = false,
             LastHandoff = null,
             LastHandoffHash = null,
             Goal = null,
             Completed = [],
             Pending = [],
-            Constraints = [],
+            Constraints = bootstrap?.Constraints?.Where(static item => !string.IsNullOrWhiteSpace(item)).ToList() ?? [],
             CarryForwardPending = false,
             LastUsageBySide = [],
             LastCumulativeByHandle = [],
@@ -146,6 +169,7 @@ public sealed class RelayBroker : IBrokerCostContext
             ClaudeCostCeilingDisabledAdvisoryFired = false,
             CodexPricingFallbackAdvisoryFired = false,
             CodexRateCardStaleAdvisoryFired = false,
+            Decisions = bootstrap?.Decisions?.Where(static item => !string.IsNullOrWhiteSpace(item)).ToList() ?? [],
             UpdatedAt = DateTimeOffset.Now,
         };
 
@@ -157,6 +181,13 @@ public sealed class RelayBroker : IBrokerCostContext
             new RelayLogEvent(DateTimeOffset.Now, "broker.options", firstRole, BuildOptionsSummary()),
             cancellationToken);
     }
+
+    public Task StartSessionAsync(
+        string sessionId,
+        string firstRole,
+        string firstPrompt,
+        CancellationToken cancellationToken) =>
+        StartSessionAsync(sessionId, firstRole, firstPrompt, bootstrap: null, cancellationToken);
 
     public async Task PauseAsync(string reason, CancellationToken cancellationToken)
     {
@@ -175,6 +206,7 @@ public sealed class RelayBroker : IBrokerCostContext
         State.LastError = reason;
         State.PendingApproval = null;
         State.UpdatedAt = DateTimeOffset.Now;
+        await WriteTerminalLearningRecordAsync(State.LastHandoff, cancellationToken);
         await PersistAndLogAsync(
             new RelayLogEvent(DateTimeOffset.Now, "session.stopped", State.ActiveAgent, reason),
             cancellationToken);
@@ -790,6 +822,7 @@ public sealed class RelayBroker : IBrokerCostContext
         if (convergence is not null)
         {
             await WriteBacklogClosureAsync(handoff, cancellationToken);
+            await WriteTerminalLearningRecordAsync(handoff, cancellationToken);
         }
 
         return new BrokerAdvanceResult(true, false, repaired, "Handoff accepted and queued for the opposite role.", State);
@@ -859,17 +892,41 @@ public sealed class RelayBroker : IBrokerCostContext
                     $"Turn packet YAML written to {yamlPath} ({yamlBytes} bytes)."),
                 cancellationToken);
 
+            var packets = EnumeratePacketPaths(handoff.Turn);
+            var snapshot = new SessionStateSnapshot
+            {
+                SessionId = State.SessionId,
+                SessionStatus = MapSessionStatus(State.Status),
+                RelayMode = "user-bridged",
+                Mode = string.IsNullOrWhiteSpace(State.Mode) ? "hybrid" : State.Mode,
+                Scope = string.IsNullOrWhiteSpace(State.Scope) ? InferScope(_options.MaxTurnsPerSession) : State.Scope,
+                CurrentTurn = State.CurrentTurn,
+                MaxTurns = _options.MaxTurnsPerSession,
+                LastAgent = handoff.Source,
+                OriginBacklogId = string.IsNullOrWhiteSpace(State.OriginBacklogId) ? State.SessionId : State.OriginBacklogId,
+                TaskBucket = State.TaskBucket,
+                TaskSummary = string.IsNullOrWhiteSpace(State.TaskSummary)
+                    ? SummarizePrompt(State.PendingPrompt)
+                    : State.TaskSummary,
+                ContractStatus = string.IsNullOrWhiteSpace(State.ContractStatus) ? "accepted" : State.ContractStatus,
+                Packets = packets,
+                Decisions = State.Decisions,
+                MetaImprovements = State.MetaImprovements,
+                ClosedReason = BuildClosedReason(handoff),
+                SupersededBy = null,
+            };
+
             var statePath = Path.Combine(sessionDir, "state.json");
-            var snapshot = new SessionStateSnapshot(
-                State.SessionId, State.CurrentTurn, State.ActiveAgent, State.UpdatedAt);
             var stateBytes = await SessionStatePersister.WriteAsync(snapshot, statePath, cancellationToken);
+            var rootStatePath = Path.Combine("Document", "dialogue", "state.json");
+            var rootStateBytes = await SessionStatePersister.WriteAsync(snapshot, rootStatePath, cancellationToken);
             await _eventLogWriter.AppendAsync(
                 State.SessionId,
                 new RelayLogEvent(
                     DateTimeOffset.Now,
                     "state_written",
                     handoff.Source,
-                    $"Session state.json written to {statePath} ({stateBytes} bytes, current_turn={State.CurrentTurn})."),
+                    $"Session state.json written to {statePath} ({stateBytes} bytes) and root state synced to {rootStatePath} ({rootStateBytes} bytes, current_turn={State.CurrentTurn})."),
                 cancellationToken);
         }
         catch (Exception ex)
@@ -883,6 +940,122 @@ public sealed class RelayBroker : IBrokerCostContext
                     $"Handoff artifact write failed: {ex.GetType().Name}: {ex.Message}"),
                 cancellationToken);
         }
+    }
+
+    private List<string> EnumeratePacketPaths(int acceptedTurn)
+    {
+        var packets = new List<string>(acceptedTurn);
+        for (var turn = 1; turn <= acceptedTurn; turn++)
+        {
+            packets.Add($"Document/dialogue/sessions/{State.SessionId}/turn-{turn}.yaml");
+        }
+
+        return packets;
+    }
+
+    private static string MapSessionStatus(RelaySessionStatus status) =>
+        status switch
+        {
+            RelaySessionStatus.Converged => "converged",
+            RelaySessionStatus.Failed or RelaySessionStatus.Stopped => "abandoned",
+            RelaySessionStatus.Idle => "active",
+            _ => "active",
+        };
+
+    private string? BuildClosedReason(HandoffEnvelope handoff)
+    {
+        if (State.Status != RelaySessionStatus.Converged &&
+            State.Status != RelaySessionStatus.Failed &&
+            State.Status != RelaySessionStatus.Stopped)
+        {
+            return null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(handoff.DoneReason))
+        {
+            return handoff.DoneReason.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(handoff.Reason))
+        {
+            return handoff.Reason.Trim();
+        }
+
+        return State.Status switch
+        {
+            RelaySessionStatus.Converged => "Session converged.",
+            RelaySessionStatus.Failed => "Session failed.",
+            RelaySessionStatus.Stopped => "Session stopped.",
+            _ => null,
+        };
+    }
+
+    private async Task WriteTerminalLearningRecordAsync(
+        HandoffEnvelope? handoff,
+        CancellationToken cancellationToken)
+    {
+        if (State.TerminalLearningRecordWritten)
+        {
+            return;
+        }
+
+        if (State.Status != RelaySessionStatus.Converged &&
+            State.Status != RelaySessionStatus.Stopped &&
+            State.Status != RelaySessionStatus.Failed)
+        {
+            return;
+        }
+
+        try
+        {
+            var path = SessionLearningRecordWriter.ResolvePath();
+            var record = SessionLearningRecordWriter.Build(State, handoff, DateTimeOffset.Now);
+            var bytes = await SessionLearningRecordWriter.AppendAsync(record, path, cancellationToken);
+            State.TerminalLearningRecordWritten = true;
+            await _eventLogWriter.AppendAsync(
+                State.SessionId,
+                new RelayLogEvent(
+                    DateTimeOffset.Now,
+                    "learning_record.written",
+                    State.ActiveAgent,
+                    $"Session learning record appended to {path} ({bytes} bytes)."),
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            await _eventLogWriter.AppendAsync(
+                State.SessionId,
+                new RelayLogEvent(
+                    DateTimeOffset.Now,
+                    "learning_record.failed",
+                    State.ActiveAgent,
+                    $"Session learning record write failed: {ex.GetType().Name}: {ex.Message}"),
+                cancellationToken);
+        }
+    }
+
+    private static string InferScope(int maxTurns) =>
+        maxTurns switch
+        {
+            <= 2 => "small",
+            <= 5 => "medium",
+            _ => "large",
+        };
+
+    private static string SummarizePrompt(string? prompt)
+    {
+        if (string.IsNullOrWhiteSpace(prompt))
+        {
+            return string.Empty;
+        }
+
+        var normalized = string.Join(" ", prompt
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+
+        const int maxLength = 600;
+        return normalized.Length <= maxLength
+            ? normalized
+            : normalized[..maxLength];
     }
 
     private async Task EmitCheckpointVerifiedAsync(TurnPacket packet, string source, CancellationToken cancellationToken)

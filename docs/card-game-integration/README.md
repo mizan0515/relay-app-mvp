@@ -133,17 +133,20 @@ If the administrator wants one visible operator surface, use the relay desktop
 UI instead of manual PowerShell.
 
 1. Launch `CodexClaudeRelay.Desktop`.
-2. Fill or keep the defaults for:
-   `Managed CardGame Root`, `Managed Task Slug`, `Managed Turns`, `Managed Loop Sessions`.
-3. Click `Managed CardGame Run`.
-4. For backlog/decision-driven execution from the same UI, click `Managed Autopilot Run`.
-5. To let Desktop execute only the single next manager-recommended action, click `Managed Next Step`.
-6. For the default operator path, click `Managed Run Until Attention`.
-7. To keep preparing/running/completing several bounded slices from the same window with an explicit loop count, click `Managed Autopilot Loop`.
-8. Read only the compact markers in the status mirror:
+2. In the `Easy Operator` box, keep the default card-game root and task slug unless you were told to change them.
+3. Click `Easy Start`.
+4. Wait until the app says attention is needed.
+5. Read only `Easy Status` and the compact markers in the status mirror:
    `D:\Unity\card game\.autopilot\generated\relay-live-signal.txt`
-9. If the relay dies, read:
+6. If the relay dies, read:
    `D:\Unity\card game\.autopilot\generated\relay-manager-signal.txt`
+
+Advanced buttons still exist for debugging:
+- `Managed CardGame Run`
+- `Managed Autopilot Run`
+- `Managed Next Step`
+- `Managed Run Until Attention`
+- `Managed Autopilot Loop`
 
 What this button does:
 - prepares the next card-game relay slice through `Start-CardGameRelay.ps1 -PrepareOnly`
@@ -167,6 +170,11 @@ What `Managed Run Until Attention` adds:
 - repeats manager-directed steps until the compact manager signal says attention is required or waiting should end
 - gives the administrator one default Codex Desktop path instead of choosing between prepare/run/complete scripts
 - keeps the stop rule compact and token-cheap because Desktop still reads only the manager signal, not the full relay log
+
+What `Easy Start` adds:
+- gives a non-developer operator one obvious button instead of multiple relay-control buttons
+- points the operator to `Easy Status` instead of the raw relay or event log views
+- uses the same compact-signal controller path as `Managed Run Until Attention`
 
 What `Managed Autopilot Loop` adds:
 - repeats `prepare -> bounded relay -> completion write-back` for the requested number of sessions

@@ -1,16 +1,74 @@
-using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using CodexClaudeRelay.Core.Models;
 
 namespace CodexClaudeRelay.Core.Protocol;
 
-public sealed record SessionStateSnapshot(
-    string SessionId,
-    int CurrentTurn,
-    string ActiveAgent,
-    DateTimeOffset UpdatedAt);
+public sealed class SessionStateSnapshot
+{
+    [JsonPropertyName("protocol_version")]
+    public string ProtocolVersion { get; init; } = "dad-v2";
+
+    [JsonPropertyName("session_id")]
+    public string SessionId { get; init; } = string.Empty;
+
+    [JsonPropertyName("session_status")]
+    public string SessionStatus { get; init; } = "active";
+
+    [JsonPropertyName("superseded_by")]
+    public string? SupersededBy { get; init; }
+
+    [JsonPropertyName("closed_reason")]
+    public string? ClosedReason { get; init; }
+
+    [JsonPropertyName("relay_mode")]
+    public string RelayMode { get; init; } = "user-bridged";
+
+    [JsonPropertyName("mode")]
+    public string Mode { get; init; } = "hybrid";
+
+    [JsonPropertyName("scope")]
+    public string Scope { get; init; } = "medium";
+
+    [JsonPropertyName("current_turn")]
+    public int CurrentTurn { get; init; }
+
+    [JsonPropertyName("max_turns")]
+    public int MaxTurns { get; init; }
+
+    [JsonPropertyName("last_agent")]
+    public string? LastAgent { get; init; }
+
+    [JsonPropertyName("origin_backlog_id")]
+    public string OriginBacklogId { get; init; } = string.Empty;
+
+    [JsonPropertyName("task_bucket")]
+    public string TaskBucket { get; init; } = string.Empty;
+
+    [JsonPropertyName("task_summary")]
+    public string TaskSummary { get; init; } = string.Empty;
+
+    [JsonPropertyName("contract_status")]
+    public string ContractStatus { get; init; } = "accepted";
+
+    [JsonPropertyName("packets")]
+    public IReadOnlyList<string> Packets { get; init; } = Array.Empty<string>();
+
+    [JsonPropertyName("decisions")]
+    public IReadOnlyList<string> Decisions { get; init; } = Array.Empty<string>();
+
+    [JsonPropertyName("meta_improvements")]
+    public IReadOnlyList<string> MetaImprovements { get; init; } = Array.Empty<string>();
+}
 
 public static class SessionStatePersister
 {
+    private static readonly JsonSerializerOptions SerializerOptions = new()
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        WriteIndented = true,
+    };
+
     public static async Task<long> WriteAsync(SessionStateSnapshot state, string outPath, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(state);
@@ -32,38 +90,6 @@ public static class SessionStatePersister
     public static string Render(SessionStateSnapshot state)
     {
         ArgumentNullException.ThrowIfNull(state);
-
-        var sb = new StringBuilder();
-        sb.Append('{').Append('\n');
-        sb.Append("  \"session_id\": ").Append(JsonString(state.SessionId)).Append(",\n");
-        sb.Append("  \"current_turn\": ").Append(state.CurrentTurn).Append(",\n");
-        sb.Append("  \"active_agent\": ").Append(JsonString(state.ActiveAgent)).Append(",\n");
-        sb.Append("  \"updated_at\": ").Append(JsonString(state.UpdatedAt.ToString("O"))).Append('\n');
-        sb.Append('}').Append('\n');
-        return sb.ToString();
-    }
-
-    private static string JsonString(string? value)
-    {
-        if (value is null) return "null";
-        var sb = new StringBuilder(value.Length + 2);
-        sb.Append('"');
-        foreach (var c in value)
-        {
-            switch (c)
-            {
-                case '"': sb.Append("\\\""); break;
-                case '\\': sb.Append("\\\\"); break;
-                case '\n': sb.Append("\\n"); break;
-                case '\r': sb.Append("\\r"); break;
-                case '\t': sb.Append("\\t"); break;
-                default:
-                    if (c < 0x20) sb.Append($"\\u{(int)c:x4}");
-                    else sb.Append(c);
-                    break;
-            }
-        }
-        sb.Append('"');
-        return sb.ToString();
+        return JsonSerializer.Serialize(state, SerializerOptions) + '\n';
     }
 }

@@ -16,13 +16,35 @@ public sealed record TurnPacket
     public string From { get; init; } = AgentRole.Codex;
     public int Turn { get; init; }
     public string SessionId { get; init; } = string.Empty;
+    public TurnContract Contract { get; init; } = new();
     public TurnHandoff Handoff { get; init; } = new();
     public PeerReview PeerReview { get; init; } = new();
+    public MyWork MyWork { get; init; } = new();
+}
+
+public sealed record TurnContract
+{
+    public string Status { get; init; } = "accepted";
+    public IReadOnlyList<string> Checkpoints { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Amendments { get; init; } = Array.Empty<string>();
 }
 
 public sealed record PeerReview
 {
+    public string ProjectAnalysis { get; init; } = string.Empty;
+    public TaskModelReview TaskModelReview { get; init; } = new();
     public IReadOnlyList<CheckpointResult> CheckpointResults { get; init; } = Array.Empty<CheckpointResult>();
+    public IReadOnlyList<string> IssuesFound { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> FixesApplied { get; init; } = Array.Empty<string>();
+}
+
+public sealed record TaskModelReview
+{
+    public string Status { get; init; } = "aligned";
+    public IReadOnlyList<string> CoverageGaps { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> ScopeCreep { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> RiskFollowups { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Amendments { get; init; } = Array.Empty<string>();
 }
 
 public sealed record CheckpointResult
@@ -52,6 +74,30 @@ public sealed record TurnHandoff
     public bool ReadyForPeerVerification { get; init; }
     public bool SuggestDone { get; init; }
     public string DoneReason { get; init; } = string.Empty;
+}
+
+public sealed record MyWork
+{
+    public string Plan { get; init; } = string.Empty;
+    public WorkChanges Changes { get; init; } = new();
+    public int SelfIterations { get; init; }
+    public WorkEvidence Evidence { get; init; } = new();
+    public string Verification { get; init; } = string.Empty;
+    public IReadOnlyList<string> OpenRisks { get; init; } = Array.Empty<string>();
+    public string Confidence { get; init; } = "medium";
+}
+
+public sealed record WorkChanges
+{
+    public IReadOnlyList<string> FilesModified { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> FilesCreated { get; init; } = Array.Empty<string>();
+    public string Summary { get; init; } = string.Empty;
+}
+
+public sealed record WorkEvidence
+{
+    public IReadOnlyList<string> Commands { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Artifacts { get; init; } = Array.Empty<string>();
 }
 
 /// <summary>

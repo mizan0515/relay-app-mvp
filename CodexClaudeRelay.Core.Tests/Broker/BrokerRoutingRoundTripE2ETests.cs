@@ -106,7 +106,10 @@ public class BrokerRoutingRoundTripE2ETests
             Assert.True(File.Exists(Path.Combine(sessionDir, "turn-1-handoff.md")));
             var stateJson = await File.ReadAllTextAsync(Path.Combine(sessionDir, "state.json"), CancellationToken.None);
             Assert.Contains("\"current_turn\": 2", stateJson);
-            Assert.Contains("\"active_agent\": \"claude-code\"", stateJson);
+            Assert.Contains("\"last_agent\": \"codex\"", stateJson);
+            Assert.Contains("\"origin_backlog_id\": \"sess-g4-codex-first\"", stateJson);
+            var rootStateJson = await File.ReadAllTextAsync(Path.Combine(tmpDir, "Document", "dialogue", "state.json"), CancellationToken.None);
+            Assert.Contains("\"session_id\": \"sess-g4-codex-first\"", rootStateJson);
 
             claude.HandoffJson = BuildHandoffJson(AgentRole.Claude, AgentRole.Codex, sessionId, 2, "codex, next step");
             await broker.AdvanceAsync(CancellationToken.None);
@@ -118,7 +121,7 @@ public class BrokerRoutingRoundTripE2ETests
             Assert.True(File.Exists(Path.Combine(sessionDir, "turn-2-handoff.md")));
             var stateJson2 = await File.ReadAllTextAsync(Path.Combine(sessionDir, "state.json"), CancellationToken.None);
             Assert.Contains("\"current_turn\": 3", stateJson2);
-            Assert.Contains("\"active_agent\": \"codex\"", stateJson2);
+            Assert.Contains("\"last_agent\": \"claude-code\"", stateJson2);
 
             Assert.Contains(log.Events, e => e.EventType == "packet_written" && e.Message.Contains("turn-1.yaml"));
             Assert.Contains(log.Events, e => e.EventType == "packet_written" && e.Message.Contains("turn-2.yaml"));
@@ -156,6 +159,7 @@ public class BrokerRoutingRoundTripE2ETests
             Assert.True(File.Exists(Path.Combine(sessionDir, "turn-2.yaml")));
             var stateJson = await File.ReadAllTextAsync(Path.Combine(sessionDir, "state.json"), CancellationToken.None);
             Assert.Contains("\"current_turn\": 3", stateJson);
+            Assert.Contains("\"last_agent\": \"codex\"", stateJson);
         }
         finally
         {

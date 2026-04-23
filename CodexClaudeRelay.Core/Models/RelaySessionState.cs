@@ -6,6 +6,18 @@ public sealed class RelaySessionState
 
     public RelaySessionStatus Status { get; set; } = RelaySessionStatus.Idle;
 
+    public string Mode { get; set; } = "hybrid";
+
+    public string Scope { get; set; } = "medium";
+
+    public string OriginBacklogId { get; set; } = string.Empty;
+
+    public string TaskBucket { get; set; } = string.Empty;
+
+    public string TaskSummary { get; set; } = string.Empty;
+
+    public string ContractStatus { get; set; } = "accepted";
+
     public string ActiveAgent { get; set; } = AgentRole.Codex;
 
     public int CurrentTurn { get; set; } = 1;
@@ -65,6 +77,12 @@ public sealed class RelaySessionState
     public Dictionary<string, int> ConsecutiveLowCacheTurnsBySide { get; set; } = [];
 
     public List<string> PolicyGapAdvisoriesFired { get; set; } = [];
+
+    public List<string> Decisions { get; set; } = [];
+
+    public List<string> MetaImprovements { get; set; } = [];
+
+    public bool TerminalLearningRecordWritten { get; set; }
 
     public DateTimeOffset SessionStartedAt { get; set; } = DateTimeOffset.Now;
 

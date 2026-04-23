@@ -30,10 +30,15 @@ public class TurnPacketAdapterTests
         Assert.Equal(AgentRole.Codex, packet.From);
         Assert.Equal(3, packet.Turn);
         Assert.Equal(CloseoutKind.PeerHandoff, packet.Handoff.CloseoutKind);
+        Assert.Equal("accepted", packet.Contract.Status);
+        Assert.Contains("c1", packet.Contract.Checkpoints);
         Assert.Equal(2, packet.PeerReview.CheckpointResults.Count);
         Assert.Equal("c1", packet.PeerReview.CheckpointResults[0].CheckpointId);
         Assert.Equal(CheckpointStatus.Fail, packet.PeerReview.CheckpointResults[1].Status);
         Assert.Equal("logs/x.txt", packet.PeerReview.CheckpointResults[1].EvidenceRef);
+        Assert.Single(packet.PeerReview.IssuesFound);
+        Assert.Equal("next", packet.MyWork.Plan);
+        Assert.Contains("logs/x.txt", packet.MyWork.Evidence.Artifacts);
     }
 
     [Fact]
@@ -50,6 +55,7 @@ public class TurnPacketAdapterTests
         var packet = TurnPacketAdapter.FromHandoffEnvelope(env);
 
         Assert.Empty(packet.PeerReview.CheckpointResults);
+        Assert.Equal("medium", packet.MyWork.Confidence);
     }
 
     [Fact]
@@ -71,6 +77,7 @@ public class TurnPacketAdapterTests
         Assert.Equal(Models.CloseoutKind.RecoveryResume, packet.Handoff.CloseoutKind);
         Assert.Equal(AgentRole.Claude, packet.From);
         Assert.Equal(4, packet.Turn);
+        Assert.Equal("low", packet.MyWork.Confidence);
     }
 
     [Fact]
