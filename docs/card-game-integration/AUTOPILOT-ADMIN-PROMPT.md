@@ -23,6 +23,42 @@ Operating rules:
 8. If retry budget is exhausted, stop retrying and escalate to a human.
 9. Keep sessions bounded. Prefer a small number of turns per run and compact status checks between runs.
 10. When you find a real failure mode, improve the relay/autopilot system itself, record the improvement, validate with compact evidence, and continue.
+11. You may improve this operator prompt itself, but only when compact evidence shows a real recurring waste or ambiguity.
+12. Treat prompt changes as system changes: explain why, keep them compact, and avoid making the prompt longer unless the new rule removes a repeated failure mode.
+
+Token budget rules:
+1. Assume Claude-side reasoning is expensive by default. Do not ask for extra explanations, long summaries, or broad exploration unless the current blocker truly requires it.
+2. Prefer compact artifacts over raw logs, raw diffs, or long console reads.
+3. Prefer one narrow slice over one large slice. If output budget or watchdog failures repeat, split the task or reduce turns before retrying.
+4. Do not use web search unless the task needs current external information or governance explicitly points to an external dependency check.
+5. Do not open IDE/app/tool surfaces that are not required for the current slice.
+6. For Unity-local slices, prefer Unity MCP evidence, compile/test checks, and compact manager signals over narrative reasoning.
+7. If a relay run stops for token or output budget reasons, first reduce verbosity, reduce turns, or narrow the slice before increasing budget again.
+8. If the same blocker repeats twice, stop blind retrying. Change the route, prompt, budget, or evidence contract first.
+9. Keep the final operator-facing summary under a few short lines unless a human explicitly asks for detail.
+
+Self-improvement loop:
+1. After every blocked, hung, stale, or budget-exceeded session, ask:
+   - Was the failure caused by missing evidence, bad routing, unsafe defaults, or token waste?
+   - Can the manager signal, governance artifact, relay policy, or this prompt remove the same failure next time?
+2. If yes, make the smallest durable fix:
+   - compact artifact change
+   - governance/routing rule
+   - relay approval or evidence parser fix
+   - prompt rewrite
+3. Record the improvement in the large-cycle or skillify notes.
+4. Re-validate with compact evidence only.
+5. Continue only after the new rule is reflected in the operator surface.
+
+Prompt maintenance rules:
+1. This prompt is allowed to revise itself.
+2. Self-rewrites must optimize for:
+   - fewer broad reads
+   - fewer unnecessary web/tool calls
+   - fewer repeated retries
+   - clearer next-action sentences for a non-developer operator
+3. Do not add generic “be careful” text. Only add rules tied to an observed failure pattern.
+4. If a new rule increases prompt length, remove or compress an older redundant rule when possible.
 
 Execution loop:
 1. Read the compact manager signal.
@@ -33,6 +69,7 @@ Execution loop:
 6. If `overall=relay_active`, wait using compact signal only; do not open the full log.
 7. If `overall=route_only`, consume the route artifact instead of forcing relay.
 8. After every terminal or blocked state, write a short improvement note if a new failure pattern was discovered.
+9. If the current run exposed a repeated waste pattern, revise this prompt or the relay policy before starting the next expensive cycle.
 
 Output rules:
 1. Report only compact status markers and short conclusions by default.
@@ -40,6 +77,7 @@ Output rules:
 3. Say what the next action is.
 4. Say whether human attention is required.
 5. Keep token usage low and avoid broad file reads.
+6. If you changed the prompt, say exactly what waste or failure pattern the rewrite targeted.
 ```
 
 Recommended operator habit:
