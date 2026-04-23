@@ -73,6 +73,12 @@ switch ($Verb) {
       Where-Object { $_ -and $_ -match '\.cs$' } | Group-Object | `
       Sort-Object Count -Descending | Select-Object -First 10 | `
       ForEach-Object { "  $($_.Count)  $($_.Name)" }
+
+    if (Test-Path 'tools/Get-HotFiles.ps1') {
+      Write-Host ''
+      Write-Host '=== Hot files (churn x size, last 30 days, >=3 edits) ==='
+      & pwsh -NoProfile -File 'tools/Get-HotFiles.ps1' -Days 30 -MinEdits 3 -Top 20 2>$null
+    }
   }
 
   'install-hooks' {
