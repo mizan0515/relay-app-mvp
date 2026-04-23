@@ -11,6 +11,8 @@ namespace CodexClaudeRelay.Desktop.Adapters;
 internal sealed class CodexCliAdapter : IRelayAdapter
 {
     private const string ProbePrompt = "Return exactly the word ok.";
+    private const string DefaultCodexModel = "gpt-5.4";
+    private const string DefaultCodexReasoningEffort = "high";
 
     private readonly ProcessCommandRunner _runner;
     private readonly string _workingDirectory;
@@ -18,6 +20,7 @@ internal sealed class CodexCliAdapter : IRelayAdapter
     // Resolved once at construction. Stale if the operator edits config.toml
     // mid-session; not re-read per turn to avoid I/O on the hot path.
     private readonly string? _configuredModel;
+    private readonly string? _configuredReasoningEffort;
 
     public CodexCliAdapter(
         string workingDirectory,
@@ -27,7 +30,8 @@ internal sealed class CodexCliAdapter : IRelayAdapter
         _runner = new ProcessCommandRunner(jobObjectOptions);
         _workingDirectory = workingDirectory;
         _command = ResolveCodexCommand(command);
-        _configuredModel = CodexModelResolver.TryResolveConfiguredModel();
+        _configuredModel = ResolveConfiguredModel();
+        _configuredReasoningEffort = ReadConfiguredValue("CCR_CODEX_REASONING_EFFORT", DefaultCodexReasoningEffort);
     }
 
     public string Role => AgentRole.Codex;
@@ -379,7 +383,47 @@ internal sealed class CodexCliAdapter : IRelayAdapter
         role == AgentRole.Codex ? AgentRole.Claude : AgentRole.Codex;
 
     private IEnumerable<string> BuildCommandArguments(IEnumerable<string> args) =>
-        _command.PrefixArguments.Concat(args);
+        _command.PrefixArguments
+            .Concat(BuildRelayConfigArguments())
+            .Concat(args);
+
+    private IEnumerable<string> BuildRelayConfigArguments()
+    {
+        if (!string.IsNullOrWhiteSpace(_configuredModel))
+        {
+            yield return "-m";
+            yield return _configuredModel;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_configuredReasoningEffort))
+        {
+            yield return "-c";
+            yield return $"model_reasoning_effort=\"{_configuredReasoningEffort}\"";
+        }
+    }
+
+    private static string? ResolveConfiguredModel()
+    {
+        var explicitModel = ReadConfiguredValue("CCR_CODEX_MODEL", null);
+        if (!string.IsNullOrWhiteSpace(explicitModel))
+        {
+            return explicitModel;
+        }
+
+        var configModel = CodexModelResolver.TryResolveConfiguredModel();
+        return string.IsNullOrWhiteSpace(configModel) ? DefaultCodexModel : configModel;
+    }
+
+    private static string? ReadConfiguredValue(string environmentKey, string? defaultValue)
+    {
+        var configured = Environment.GetEnvironmentVariable(environmentKey);
+        if (!string.IsNullOrWhiteSpace(configured))
+        {
+            return configured.Trim();
+        }
+
+        return string.IsNullOrWhiteSpace(defaultValue) ? null : defaultValue;
+    }
 
     private static CodexCommandSpec ResolveCodexCommand(string command)
     {

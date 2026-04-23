@@ -11,11 +11,15 @@ namespace CodexClaudeRelay.Desktop.Adapters;
 internal sealed class ClaudeCliAdapter : IRelayAdapter
 {
     private const string ProbePrompt = "Return exactly the word ok.";
+    private const string DefaultClaudeModel = "opus";
+    private const string DefaultClaudeEffort = "high";
 
     private readonly ProcessCommandRunner _runner;
     private readonly string _workingDirectory;
     private readonly string _command;
     private readonly double? _maxBudgetUsd;
+    private readonly string? _configuredModel;
+    private readonly string? _configuredEffort;
     private string? _cachedCliVersion;
     private string? _cachedAuthMethod;
 
@@ -29,6 +33,8 @@ internal sealed class ClaudeCliAdapter : IRelayAdapter
         _workingDirectory = workingDirectory;
         _command = command;
         _maxBudgetUsd = maxBudgetUsd;
+        _configuredModel = ReadConfiguredValue("CCR_CLAUDE_MODEL", DefaultClaudeModel);
+        _configuredEffort = ReadConfiguredValue("CCR_CLAUDE_EFFORT", DefaultClaudeEffort);
     }
 
     public string Role => AgentRole.Claude;
@@ -42,7 +48,7 @@ internal sealed class ClaudeCliAdapter : IRelayAdapter
         var authStatus = await _runner.RunAsync(_command, ["auth", "status"], _workingDirectory, cancellationToken);
         var probe = await _runner.RunAsync(
             _command,
-            ["-p", ProbePrompt, "--output-format", "json"],
+            BuildClaudeArguments(ProbePrompt),
             _workingDirectory,
             cancellationToken);
 
@@ -127,9 +133,12 @@ internal sealed class ClaudeCliAdapter : IRelayAdapter
         {
             "-p",
             prompt,
-            "--output-format",
-            "json",
         };
+
+        AppendConfiguredSessionArguments(args);
+
+        args.Add("--output-format");
+        args.Add("json");
 
         if (_maxBudgetUsd.HasValue)
         {
@@ -218,6 +227,46 @@ internal sealed class ClaudeCliAdapter : IRelayAdapter
 
             return new RelayAdapterResult(output, resolvedSessionId, diagnostics, usage);
         }
+    }
+
+    private string[] BuildClaudeArguments(string prompt)
+    {
+        var args = new List<string>
+        {
+            "-p",
+            prompt,
+        };
+
+        AppendConfiguredSessionArguments(args);
+        args.Add("--output-format");
+        args.Add("json");
+        return args.ToArray();
+    }
+
+    private void AppendConfiguredSessionArguments(ICollection<string> args)
+    {
+        if (!string.IsNullOrWhiteSpace(_configuredModel))
+        {
+            args.Add("--model");
+            args.Add(_configuredModel);
+        }
+
+        if (!string.IsNullOrWhiteSpace(_configuredEffort))
+        {
+            args.Add("--effort");
+            args.Add(_configuredEffort);
+        }
+    }
+
+    private static string? ReadConfiguredValue(string environmentKey, string defaultValue)
+    {
+        var configured = Environment.GetEnvironmentVariable(environmentKey);
+        if (!string.IsNullOrWhiteSpace(configured))
+        {
+            return configured.Trim();
+        }
+
+        return string.IsNullOrWhiteSpace(defaultValue) ? null : defaultValue;
     }
 
     private static (bool IsError, string Message) ParseProbeOutcome(JsonElement root, string fallback)

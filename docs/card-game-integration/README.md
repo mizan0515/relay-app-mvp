@@ -205,6 +205,16 @@ Stale signal handling:
 - manager signal also detects `relay_hung` and `relay_session_mismatch`, so a new prepared session cannot be hidden behind an unrelated older active relay
 - Desktop itself now shows only an event-log tail in the main surface so routine operation does not require reading the full JSONL log
 
+Peer model defaults:
+- relay now launches Claude with `--model opus --effort high` by default
+- relay now launches Codex with `-m gpt-5.4 -c model_reasoning_effort="high"` by default
+- these defaults aim at unattended relay quality without jumping to the most expensive settings by default
+- override environment variables:
+  - `CCR_CLAUDE_MODEL`
+  - `CCR_CLAUDE_EFFORT`
+  - `CCR_CODEX_MODEL`
+  - `CCR_CODEX_REASONING_EFFORT`
+
 If the administrator wants to stay inside Codex Desktop only, the working rule
 should be one repeated manager prompt:
 
